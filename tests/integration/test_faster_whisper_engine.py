@@ -87,9 +87,7 @@ def test_transcribe_hokkien_sample(sample_audio: Path, tmp_path: Path) -> None:
     )
 
 
-def test_timestamps_are_monotonic_and_within_duration(
-    sample_audio: Path, tmp_path: Path
-) -> None:
+def test_timestamps_are_monotonic_and_within_duration(sample_audio: Path, tmp_path: Path) -> None:
     """Segments must be time-ordered and bounded by audio duration."""
     from taigi_asr.engines.faster_whisper import FasterWhisperEngine
 
@@ -109,7 +107,7 @@ def test_timestamps_are_monotonic_and_within_duration(
 
     assert all(isinstance(s, TimestampedSegment) for s in segments)
     assert all(s.start_time <= s.end_time for s in segments)
-    for prev, curr in zip(segments, segments[1:]):
+    for prev, curr in zip(segments, segments[1:], strict=False):
         assert prev.start_time <= curr.start_time, "Segments must be in chronological order"
     # Tolerance: +0.5s for VAD padding
     assert segments[-1].end_time <= duration + 0.5

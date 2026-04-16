@@ -32,8 +32,16 @@ AUDIO = REPO / "data" / "test.mp3"
 # Reference anchors likely to appear in a 54-min Hokkien recording. Used as a
 # rough accuracy smoke; for rigorous WER you'd need a full reference transcript.
 ACCURACY_ANCHORS = [
-    "小時候", "跌倒", "長大", "傻傻", "這裡",
-    "玲瓏", "醫沒好", "這", "不", "是",
+    "小時候",
+    "跌倒",
+    "長大",
+    "傻傻",
+    "這裡",
+    "玲瓏",
+    "醫沒好",
+    "這",
+    "不",
+    "是",
 ]
 
 
@@ -55,7 +63,9 @@ def _nvidia_smi_used_mib() -> int:
     try:
         r = subprocess.run(
             ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return int(r.stdout.strip().split("\n")[0])
     except Exception:
@@ -67,8 +77,9 @@ def main() -> int:
     ap.add_argument("--beam-size", type=int, default=5)
     ap.add_argument("--best-of", type=int, default=5)
     ap.add_argument("--batch-size", type=int, default=4)
-    ap.add_argument("--compute-type", default="int8_float16",
-                    choices=["int8_float16", "float16", "int8"])
+    ap.add_argument(
+        "--compute-type", default="int8_float16", choices=["int8_float16", "float16", "int8"]
+    )
     ap.add_argument("--audio", type=Path, default=AUDIO)
     args = ap.parse_args()
 
@@ -80,8 +91,10 @@ def main() -> int:
     vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
     print("=" * 72)
     print(f"Device: {dev} ({vram:.2f} GB)")
-    print(f"Config: compute_type={args.compute_type} batch={args.batch_size} "
-          f"beam={args.beam_size} best_of={args.best_of}")
+    print(
+        f"Config: compute_type={args.compute_type} batch={args.batch_size} "
+        f"beam={args.beam_size} best_of={args.best_of}"
+    )
     print(f"Audio:  {args.audio}")
     print("=" * 72)
 
@@ -109,8 +122,10 @@ def main() -> int:
         engine.load()
         t_load = time.perf_counter() - t0
         vram_after_load = _nvidia_smi_used_mib()
-        print(f"[2/3] Model load: {_fmt_time(t_load)} | "
-              f"VRAM after load {vram_after_load} MiB (delta +{vram_after_load - vram_before} MiB)")
+        print(
+            f"[2/3] Model load: {_fmt_time(t_load)} | "
+            f"VRAM after load {vram_after_load} MiB (delta +{vram_after_load - vram_before} MiB)"
+        )
 
         t0 = time.perf_counter()
         segments = engine.transcribe(wav_path, word_timestamps=False)
@@ -125,8 +140,10 @@ def main() -> int:
         xrt = duration / t_tr if t_tr > 0 else 0
         hits = [a for a in ACCURACY_ANCHORS if a in full]
 
-        print(f"[3/3] Transcribe: {_fmt_time(t_tr)} | "
-              f"xRT {xrt:.2f}x | peak VRAM {vram_peak} MiB ({peak:.2f} GB)")
+        print(
+            f"[3/3] Transcribe: {_fmt_time(t_tr)} | "
+            f"xRT {xrt:.2f}x | peak VRAM {vram_peak} MiB ({peak:.2f} GB)"
+        )
         print("-" * 72)
         print(f"Segments: {seg_count} | Characters: {char_count}")
         print(f"Anchors hit: {len(hits)}/{len(ACCURACY_ANCHORS)} -> {hits}")
@@ -139,8 +156,10 @@ def main() -> int:
         print("=" * 72)
 
         total = t_pre + t_load + t_tr
-        print(f"TOTAL: {_fmt_time(total)} for {_fmt_time(duration)} of audio "
-              f"(overall {duration / total:.2f}x real-time)")
+        print(
+            f"TOTAL: {_fmt_time(total)} for {_fmt_time(duration)} of audio "
+            f"(overall {duration / total:.2f}x real-time)"
+        )
     finally:
         AudioConverter.cleanup(wav_path)
         try:

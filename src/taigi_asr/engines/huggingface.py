@@ -68,8 +68,7 @@ class HuggingFaceEngine:
                 )
             except ImportError as exc:
                 raise ModelLoadError(
-                    "transformers / torch not installed. "
-                    'Run: pip install -e ".[hf]"'
+                    'transformers / torch not installed. Run: pip install -e ".[hf]"'
                 ) from exc
 
             try:
@@ -86,9 +85,7 @@ class HuggingFaceEngine:
                     try:
                         from transformers import BitsAndBytesConfig
 
-                        model_kwargs["quantization_config"] = BitsAndBytesConfig(
-                            load_in_8bit=True
-                        )
+                        model_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
                     except ImportError as exc:
                         raise InsufficientVRAMError(
                             "HuggingFace int8 path requires bitsandbytes, which failed "

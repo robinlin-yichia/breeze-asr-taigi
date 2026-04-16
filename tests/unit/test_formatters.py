@@ -21,8 +21,7 @@ def sample_segments() -> list[TimestampedSegment]:
 class TestToTxt:
     def test_one_line_per_segment_with_timestamps(self, sample_segments) -> None:
         expected = (
-            "[00:00:00 - 00:00:03] 小時候跌倒醫沒好\n"
-            "[00:00:03 - 00:00:06] 長大傻傻在這裡喊玲瓏\n"
+            "[00:00:00 - 00:00:03] 小時候跌倒醫沒好\n[00:00:03 - 00:00:06] 長大傻傻在這裡喊玲瓏\n"
         )
         assert to_txt(sample_segments) == expected
 

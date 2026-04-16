@@ -84,6 +84,12 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+extend-exclude = [
+    "legacy",        # original Colab notebooks preserved as historical reference
+    "build",
+    "dist",
+    ".venv",
+]
 
 [tool.ruff.lint]
 select = [
@@ -96,6 +102,7 @@ select = [
 ]
 ignore = [
     "E501",  # line-too-long (handled by formatter)
+    "B008",  # function call in argument defaults — Gradio gr.Progress idiom
 ]
 
 [tool.ruff.format]

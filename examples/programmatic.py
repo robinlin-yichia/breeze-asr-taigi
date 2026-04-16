@@ -33,8 +33,8 @@ def main(audio_path: str) -> None:
         engine.load()
         segments = engine.transcribe(
             wav,
-            word_timestamps=False,   # flip to True for per-word timings
-            beam_size=5,             # override here if you want, None=use constructor default
+            word_timestamps=False,  # flip to True for per-word timings
+            beam_size=5,  # override here if you want, None=use constructor default
             vad_filter=True,
         )
     finally:

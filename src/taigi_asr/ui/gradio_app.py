@@ -141,11 +141,15 @@ def _transcribe(
             )
 
         progress(0.9, desc="輸出字幕檔...")
-        outputs = _write_outputs(segments, formats, meta={
-            "engine": spec.kind.value,
-            "compute_type": spec.compute_type,
-            "duration_sec": round(duration, 2),
-        })
+        outputs = _write_outputs(
+            segments,
+            formats,
+            meta={
+                "engine": spec.kind.value,
+                "compute_type": spec.compute_type,
+                "duration_sec": round(duration, 2),
+            },
+        )
 
         preview = "\n".join(seg.to_timestamp_line() for seg in segments[:20])
         if len(segments) > 20:
@@ -238,7 +242,7 @@ def build_ui() -> gr.Blocks:
         gr.Markdown(HEADER_MD)
 
         with gr.Row():
-            gpu_panel = gr.Markdown(_gpu_panel_text(info, initial_spec))
+            gr.Markdown(_gpu_panel_text(info, initial_spec))
 
         audio_input = gr.Audio(
             label="拖放或上傳音檔（支援 m4a / mp3 / wav / mp4 / mov / mkv / flac / ogg / webm）",

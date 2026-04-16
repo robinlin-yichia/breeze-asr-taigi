@@ -13,9 +13,7 @@ from taigi_asr.segments import TimestampedSegment
 
 class TestFakeEngineSatisfiesProtocol:
     def test_fake_engine_is_structural_instance(self) -> None:
-        engine: ASREngine = FakeEngine(
-            script=[TimestampedSegment(0.0, 1.0, "hello")]
-        )
+        engine: ASREngine = FakeEngine(script=[TimestampedSegment(0.0, 1.0, "hello")])
         # Duck-typed structural check: all protocol methods exist
         assert callable(engine.load)
         assert callable(engine.transcribe)

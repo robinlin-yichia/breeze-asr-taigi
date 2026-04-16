@@ -36,8 +36,8 @@ class EngineSpec:
     """
 
     kind: EngineKind
-    device: str              # "cuda" | "cpu"
-    compute_type: str        # faster-whisper vocab: float16 | int8_float16 | int8
+    device: str  # "cuda" | "cpu"
+    compute_type: str  # faster-whisper vocab: float16 | int8_float16 | int8
     batch_size: int
 
 
@@ -152,9 +152,9 @@ class EngineRouter:
         elif vram >= 10.0:
             batch, ct = 4, "float16"
         elif vram >= 6.0:
-            batch, ct = 2, "int8"         # bitsandbytes 8-bit (Linux only)
+            batch, ct = 2, "int8"  # bitsandbytes 8-bit (Linux only)
         else:
-            batch, ct = 1, "float16"      # 4 GB dGPU: aggressive low-mem
+            batch, ct = 1, "float16"  # 4 GB dGPU: aggressive low-mem
         return EngineSpec(
             kind=EngineKind.HUGGINGFACE,
             device="cuda",

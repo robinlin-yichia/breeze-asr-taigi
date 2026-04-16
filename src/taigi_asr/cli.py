@@ -47,7 +47,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--format",
         default="srt",
         help="Output format(s). Single: srt|txt|vtt|json. Multiple: "
-             "comma-separated (e.g. 'srt,txt,json') - each written alongside input.",
+        "comma-separated (e.g. 'srt,txt,json') - each written alongside input.",
     )
     parser.add_argument("--out", type=Path, help="Output path (single format only)")
     parser.add_argument(

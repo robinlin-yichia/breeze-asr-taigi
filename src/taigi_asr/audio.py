@@ -75,9 +75,7 @@ class AudioConverter:
         from pydub import AudioSegment
 
         audio = AudioSegment.from_file(src)
-        audio = (
-            audio.set_frame_rate(AudioConverter.TARGET_SR).set_channels(1).set_sample_width(2)
-        )
+        audio = audio.set_frame_rate(AudioConverter.TARGET_SR).set_channels(1).set_sample_width(2)
         audio.export(wav_out, format="wav")
 
     @staticmethod

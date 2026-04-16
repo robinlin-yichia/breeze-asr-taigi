@@ -36,14 +36,14 @@ class TestEngineRouter:
     @pytest.mark.parametrize(
         ("vram_gb", "cuda", "expected_kind", "expected_compute"),
         [
-            (0.0, False, EngineKind.FASTER_WHISPER, "int8"),         # CPU-only
+            (0.0, False, EngineKind.FASTER_WHISPER, "int8"),  # CPU-only
             (2.0, True, EngineKind.FASTER_WHISPER, "int8_float16"),  # tiny GPU
-            (3.84, True, EngineKind.FASTER_WHISPER, "int8_float16"), # RTX 3050 Laptop (Windows)
+            (3.84, True, EngineKind.FASTER_WHISPER, "int8_float16"),  # RTX 3050 Laptop (Windows)
             (4.0, True, EngineKind.FASTER_WHISPER, "int8_float16"),  # 4 GB exact
-            (6.0, True, EngineKind.HUGGINGFACE, "int8"),             # 6GB -> HF int8
-            (8.0, True, EngineKind.HUGGINGFACE, "int8"),             # 8GB -> HF int8 (fp16 too tight)
-            (12.0, True, EngineKind.HUGGINGFACE, "float16"),         # 12GB -> fp16
-            (24.0, True, EngineKind.HUGGINGFACE, "float16"),         # L4/A100 -> HF fp16
+            (6.0, True, EngineKind.HUGGINGFACE, "int8"),  # 6GB -> HF int8
+            (8.0, True, EngineKind.HUGGINGFACE, "int8"),  # 8GB -> HF int8 (fp16 too tight)
+            (12.0, True, EngineKind.HUGGINGFACE, "float16"),  # 12GB -> fp16
+            (24.0, True, EngineKind.HUGGINGFACE, "float16"),  # L4/A100 -> HF fp16
         ],
     )
     def test_auto_select_by_vram(

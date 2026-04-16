@@ -23,14 +23,14 @@ def main() -> None:
     # Docker sets --server-name 0.0.0.0
     host = args.server_name or args.host
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
 
     demo = build_ui()
 
     if not args.no_browser and host in ("127.0.0.1", "localhost"):
-        threading.Timer(
-            1.5, lambda: webbrowser.open(f"http://{host}:{args.port}")
-        ).start()
+        threading.Timer(1.5, lambda: webbrowser.open(f"http://{host}:{args.port}")).start()
 
     import gradio as gr
 

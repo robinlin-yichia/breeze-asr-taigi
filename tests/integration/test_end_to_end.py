@@ -82,9 +82,7 @@ def test_cli_transcribes_sample_audio(sample_audio: Path, tmp_path: Path) -> Non
         timeout=600,
     )
 
-    assert result.returncode == 0, (
-        f"CLI failed: stdout={result.stdout!r} stderr={result.stderr!r}"
-    )
+    assert result.returncode == 0, f"CLI failed: stdout={result.stdout!r} stderr={result.stderr!r}"
     assert out_srt.exists(), "SRT file not created"
     content = out_srt.read_text(encoding="utf-8")
     # int8/CPU inference introduces small character-level variance; check

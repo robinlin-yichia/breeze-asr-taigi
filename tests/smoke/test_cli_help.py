@@ -48,7 +48,14 @@ def test_cli_accepts_known_engines(engine_flag: str, tmp_path) -> None:
     # Only check that parser accepts it — shouldn't execute inference
     # since audio file is missing; exit code 2 or later is fine.
     result = subprocess.run(
-        [sys.executable, "-m", "taigi_asr.cli", str(tmp_path / "missing.wav"), "--engine", engine_flag],
+        [
+            sys.executable,
+            "-m",
+            "taigi_asr.cli",
+            str(tmp_path / "missing.wav"),
+            "--engine",
+            engine_flag,
+        ],
         capture_output=True,
         text=True,
         timeout=15,

@@ -26,8 +26,8 @@ DEFAULT_PATIENCE = 1.0
 DEFAULT_TEMPERATURE = 0.0
 DEFAULT_VAD_MIN_SILENCE_MS = 500
 DEFAULT_VAD_SPEECH_PAD_MS = 200
-DEFAULT_LANGUAGE = "zh"             # Breeze-ASR-26 fine-tunes Whisper on Taiwanese Hokkien
-                                     # but uses Mandarin token vocabulary.
+DEFAULT_LANGUAGE = "zh"  # Breeze-ASR-26 fine-tunes Whisper on Taiwanese Hokkien
+# but uses Mandarin token vocabulary.
 DEFAULT_CHUNK_LENGTH_S = 30
 DEFAULT_STRIDE_LENGTH_S = (4, 2)
 DEFAULT_NO_REPEAT_NGRAM_SIZE = 3
