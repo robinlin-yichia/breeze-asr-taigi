@@ -1,0 +1,61 @@
+version: 2
+updates:
+  # Keep GitHub Actions pinned refs fresh so the Node 20 deprecation (and
+  # future action-side CVEs / breaking changes) don't bit-rot the CI.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: ci
+      include: scope
+
+  # Python runtime + dev deps. Grouped to avoid PR spam for minor bumps;
+  # ASR dependencies (torch / faster-whisper / transformers) go into
+  # their own group because they need extra manual verification.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      asr-stack:
+        patterns:
+          - "torch*"
+          - "faster-whisper*"
+          - "transformers*"
+          - "accelerate*"
+          - "bitsandbytes*"
+          - "huggingface-hub*"
+          - "ctranslate2*"
+      dev-tools:
+        patterns:
+          - "ruff*"
+          - "pytest*"
+          - "pre-commit*"
+      runtime:
+        patterns:
+          - "gradio*"
+          - "soundfile*"
+          - "pydub*"
+          - "numpy*"
+    commit-message:
+      prefix: deps
+      include: scope
+
+  # Base image + any Dockerfile FROM pins.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: docker
+      include: scope

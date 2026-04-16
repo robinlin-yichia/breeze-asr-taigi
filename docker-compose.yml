@@ -1,0 +1,32 @@
+services:
+  taigi-asr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: taigi-asr:latest
+    container_name: taigi-asr
+    ports:
+      - "7860:7860"
+    volumes:
+      # Persist the HuggingFace model cache so the ~2.9 GB CT2 weights don't
+      # re-download on every `docker compose up`.
+      - hf-cache:/root/.cache/huggingface
+      # Mount local audio files for batch use.
+      - ./data:/app/data
+    environment:
+      - TAIGI_ASR_HOST=0.0.0.0
+      - TAIGI_ASR_PORT=7860
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+volumes:
+  hf-cache:
