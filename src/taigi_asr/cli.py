@@ -130,11 +130,21 @@ def main(argv: list[str] | None = None) -> int:
             engine = build_engine(spec)
             engine.load()
 
+        # Only Faster-Whisper's transcribe() accepts beam_size / best_of.
+        # Passing them to the HuggingFace engine would raise TypeError.
         extra_kwargs: dict = {"word_timestamps": args.word_timestamps}
-        if args.beam_size is not None:
-            extra_kwargs["beam_size"] = args.beam_size
-        if args.best_of is not None:
-            extra_kwargs["best_of"] = args.best_of
+        if spec.kind is EngineKind.FASTER_WHISPER:
+            if args.beam_size is not None:
+                extra_kwargs["beam_size"] = args.beam_size
+            if args.best_of is not None:
+                extra_kwargs["best_of"] = args.best_of
+        else:
+            if args.beam_size is not None or args.best_of is not None:
+                print(
+                    "WARNING: --beam-size / --best-of are ignored on the "
+                    "HuggingFace engine (Faster-Whisper only).",
+                    file=sys.stderr,
+                )
         segments = engine.transcribe(wav_path, **extra_kwargs)
     except TaigiASRError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

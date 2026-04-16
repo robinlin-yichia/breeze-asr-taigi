@@ -5,7 +5,7 @@
 faster-whisper>=1.1.0
 soundfile>=0.12
 pydub>=0.25
-numpy<2.0
+numpy>=1.24
 gradio>=4.44
 huggingface-hub>=0.24
 

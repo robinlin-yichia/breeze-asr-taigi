@@ -7,7 +7,6 @@ decision table.
 
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass
 from enum import Enum
 
@@ -15,20 +14,19 @@ from taigi_asr.errors import InsufficientVRAMError
 
 
 def _bitsandbytes_available() -> bool:
-    """Gate HF int8 path to platforms where bitsandbytes actually runs.
+    """Probe whether bitsandbytes can actually load on this machine.
 
-    bitsandbytes ships Linux-only CUDA binaries; on Windows the import raises
-    at runtime. The router checks both platform AND import so a user who
-    installed a community Windows wheel can still opt in.
+    bitsandbytes ships Linux-only CUDA binaries upstream, but community
+    Windows wheels exist and users sometimes install them. We just try to
+    import and actually touch the library so any missing CUDA DLL surfaces
+    as an ImportError/OSError — a failed import is the real signal, not the
+    platform string.
     """
-    if sys.platform not in ("linux", "linux2"):
-        return False
     try:
         import bitsandbytes  # noqa: F401
-
-        return True
     except Exception:
         return False
+    return True
 
 
 class EngineKind(str, Enum):

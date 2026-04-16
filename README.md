@@ -83,7 +83,7 @@ CLI 選項：
 from taigi_asr.audio import AudioConverter
 from taigi_asr.engines import build_engine
 from taigi_asr.formatters import to_srt
-from taigi_asr.router import EngineRouter, GPUProfiler
+from taigi_asr.router import EngineKind, EngineRouter, GPUProfiler
 
 info = GPUProfiler.detect()
 spec = EngineRouter.select(info)           # 自動路由
@@ -91,9 +91,29 @@ wav, duration = AudioConverter.convert("audio.m4a")
 
 engine = build_engine(spec)
 engine.load()
-segments = engine.transcribe(wav, beam_size=5)
+
+# beam_size / best_of 只在 Faster-Whisper 引擎支援,
+# HuggingFace 引擎的 transcribe() 簽章只吃 word_timestamps,
+# 所以用 spec.kind 分流避免 TypeError。
+if spec.kind is EngineKind.FASTER_WHISPER:
+    segments = engine.transcribe(wav, beam_size=5)
+else:
+    segments = engine.transcribe(wav)
+
 srt = to_srt(segments)
 engine.unload()
+```
+
+或是要顯式鎖一個引擎時,直接建構 `FasterWhisperEngine`(不走 router):
+
+```python
+from taigi_asr.engines.faster_whisper import FasterWhisperEngine
+
+engine = FasterWhisperEngine(
+    device="cuda", compute_type="int8_float16", batch_size=4, beam_size=5
+)
+engine.load()
+segments = engine.transcribe("audio.m4a")
 ```
 
 ---

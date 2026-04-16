@@ -49,8 +49,8 @@ docker compose up -d
 
 By default the router picks `int8_float16` + `batch=4` on 4 GB cards which peaks around 2.9 GB. OOM usually means:
 1. **Other apps hogging VRAM.** Close Chrome hardware acceleration, OBS, games, VSCode with GPU rendering. Run `nvidia-smi` to confirm.
-2. **Forced `--engine hf` override.** The HF path needs > 6 GB headroom. Either remove the override or add `--beam-size 1`.
-3. **Huge beam_size.** `--beam-size 12` is the documented ceiling; 15+ WILL OOM.
+2. **Forced `--engine hf` override.** The HF path peaks higher than Faster-Whisper on a 4 GB card; on Windows (no bitsandbytes int8) it ends up at `fp16` + `batch=1` which is still risky. Drop the override and let auto-routing pick Faster-Whisper, or close other GPU apps to free headroom.
+3. **Huge beam_size (Faster-Whisper only).** `--beam-size 12` is the documented ceiling; 15+ WILL OOM. This flag is silently ignored by the HuggingFace engine.
 
 Emergency recovery: set env before launching:
 ```
@@ -124,4 +124,5 @@ Bigger beam + best_of helps borderline cases but does not recover fundamentally-
 Faster-Whisper uses segment-level timestamps from the decoder. Known caveats:
 - VAD (default on) pads silence by 200 ms — subtract that if aligning to a waveform.
 - Very short audio (< 2 s) sometimes yields `0.0 -> 0.0` for the only segment; the formatter clamps to `start + 1.0` seconds.
-- `--word-timestamps` uses an additional CTC alignment pass; slower but more precise. Not available on the HuggingFace engine.
+- `--word-timestamps` on Faster-Whisper runs an additional CTC alignment pass; slower but more precise per-word boundaries.
+- `--word-timestamps` on the HuggingFace engine is forwarded to the Transformers pipeline as `return_timestamps="word"`; quality depends on the model's decoder and can be noisier than Faster-Whisper's forced alignment.
