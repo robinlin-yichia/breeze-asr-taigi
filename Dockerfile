@@ -23,7 +23,19 @@ ENV DEBIAN_FRONTEND=noninteractive \
     TAIGI_ASR_HOST=0.0.0.0
 
 # ---------- Layer 1: system packages ----------
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Resilient to transient apt mirror sync issues (observed in CI where
+# archive.ubuntu.com returned partially-updated Packages.gz files, failing
+# the SHA check mid-build). We retry `apt-get update` with exponential
+# backoff and tell apt itself to retry individual HTTP fetches.
+RUN set -eux; \
+    for i in 1 2 3 4 5; do \
+        apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=30 && break; \
+        echo "apt-get update attempt $i failed, sleeping $((i*5))s"; \
+        sleep $((i*5)); \
+    done; \
+    apt-get install -y --no-install-recommends \
+        -o Acquire::Retries=5 \
+        -o Acquire::http::Timeout=30 \
         python3.11 python3.11-venv python3.11-dev python3-pip \
         ffmpeg ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
