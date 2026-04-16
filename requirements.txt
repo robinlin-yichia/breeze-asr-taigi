@@ -1,0 +1,13 @@
+# Runtime dependencies (GPU/inference)
+# Install PyTorch separately with correct CUDA wheel:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+
+faster-whisper>=1.1.0
+soundfile>=0.12
+pydub>=0.25
+numpy<2.0
+gradio>=4.44
+huggingface-hub>=0.24
+
+# Optional: HuggingFace pipeline engine
+# pip install -e ".[hf]"   # transformers + accelerate + bitsandbytes
