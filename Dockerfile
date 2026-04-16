@@ -1,6 +1,15 @@
 # syntax=docker/dockerfile:1.7
-# Taigi ASR — CUDA 12.1 runtime + Python 3.11 + ffmpeg
+# Taigi ASR - CUDA 12.1 runtime + Python 3.11 + ffmpeg
 # Target: WSL2 Ubuntu with NVIDIA Container Toolkit
+#
+# Layer strategy (source->install ordering is deliberate so editing src/
+# only invalidates the small final install layer, not the 2 GB torch layer):
+#   1. apt system packages    (rarely changes)
+#   2. PyTorch CUDA wheel     (pinned to cu121, ~2 GB)
+#   3. project metadata + src (invalidated on any repo change)
+#   4. runtime assets         (data/ + examples/)
+# Every pip layer uses a BuildKit cache mount so wheel downloads persist
+# across rebuilds even when the layer itself is invalidated.
 FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -8,11 +17,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONIOENCODING=utf-8 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1 \
+    PIP_ROOT_USER_ACTION=ignore \
     HF_HOME=/root/.cache/huggingface \
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
     TAIGI_ASR_HOST=0.0.0.0
 
+# ---------- Layer 1: system packages ----------
 RUN apt-get update && apt-get install -y --no-install-recommends \
         python3.11 python3.11-venv python3.11-dev python3-pip \
         ffmpeg ca-certificates curl \
@@ -22,22 +32,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy packaging metadata first so dependency layers cache across source edits.
-COPY pyproject.toml README.md requirements.txt requirements-dev.txt ./
-COPY src/ ./src/
+# ---------- Layer 2: PyTorch CUDA wheel (~2 GB, rarely invalidated) ----------
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    pip install --upgrade pip \
+ && pip install torch --index-url https://download.pytorch.org/whl/cu121
 
-# CUDA 12.1 PyTorch wheels (bitsandbytes for HF int8 only works on Linux).
-RUN pip install --upgrade pip && \
-    pip install torch --index-url https://download.pytorch.org/whl/cu121 && \
+# ---------- Layer 3: project metadata + source + install ----------
+# Copy metadata first (for completeness / inspection) then full src/ before
+# install so `pip install -e .` finds the package layout.
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     pip install -e ".[hf]"
 
-# Ship non-essential assets last so editing them doesn't invalidate the deps.
+# ---------- Layer 4: runtime-only assets ----------
+# Separated so editing examples/ or data/ doesn't invalidate the install layer.
 COPY data/ ./data/
 COPY examples/ ./examples/
 
 EXPOSE 7860
 
-# Healthcheck hits the Gradio root so `docker compose ps` shows real status.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
     CMD curl -fsS http://localhost:7860/ >/dev/null || exit 1
 

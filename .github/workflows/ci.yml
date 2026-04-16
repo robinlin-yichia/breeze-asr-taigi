@@ -10,50 +10,82 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Opt into Node 24 for all JavaScript actions so the Jun-2026 deprecation
+  # notices stop polluting the log of every job.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONIOENCODING: utf-8
+  # Silence UV telemetry and keep cache location explicit.
+  UV_NO_SYNC: "1"
+
 jobs:
   lint:
     name: Lint (ruff)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'pyproject.toml'
+
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: pip
-      - run: pip install "ruff>=0.6"
+          python-version: '3.11'
+
+      - name: Install ruff
+        run: uv pip install --system "ruff>=0.6"
+
       - run: ruff check .
       - run: ruff format --check .
 
   test:
     name: Tests (${{ matrix.os }} · Py ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ['3.10', '3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install ffmpeg (cross-platform, cached)
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: release
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'pyproject.toml'
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: pip
-      - name: Install ffmpeg (Ubuntu)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - name: Install ffmpeg (Windows)
-        if: runner.os == 'Windows'
-        run: choco install ffmpeg -y --no-progress
-      # CPU-only torch to keep CI runners lean.
-      - name: Install torch (CPU)
-        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - name: Install taigi-asr + dev tools
-        run: pip install -e ".[dev]"
+
+      - name: Install torch (CPU) + project + dev extras
+        shell: bash
+        run: |
+          uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu
+          uv pip install --system -e ".[dev]"
+
       - name: Run unit + smoke tests
-        env:
-          PYTHONIOENCODING: utf-8
-        run: pytest tests/unit tests/smoke -v --cov=taigi_asr --cov-report=xml
-      - name: Upload coverage
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ] && [ "${{ matrix.python-version }}" = "3.11" ]; then
+            # Primary cell: coverage + xml report for codecov upload.
+            pytest tests/unit tests/smoke -v --cov=taigi_asr --cov-report=xml
+          else
+            # Secondary cells: skip coverage overhead; we only upload from one cell.
+            pytest tests/unit tests/smoke -v
+          fi
+
+      - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
         uses: codecov/codecov-action@v4
         with:
@@ -63,14 +95,25 @@ jobs:
   docker:
     name: Docker build (smoke)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+
       - uses: docker/setup-buildx-action@v3
-      - name: Build image (no push)
+
+      - name: Build image (no push) with GHA cache
         uses: docker/build-push-action@v6
         with:
           context: .
           push: false
+          load: true
           tags: taigi-asr:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Smoke-import the built image
+        # Ensures the image layers actually produce a working Python env,
+        # not just that Docker build didn't error mid-stage.
+        run: |
+          docker run --rm --entrypoint python taigi-asr:ci -c \
+            "import taigi_asr; print('taigi-asr', taigi_asr.__version__, 'OK')"
