@@ -106,7 +106,30 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Audio duration: {duration:.1f} s", file=sys.stderr)
 
         engine = build_engine(spec)
-        engine.load()
+        try:
+            engine.load()
+        except InsufficientVRAMError as exc:
+            # Auto-downgrade: only when the user asked for `auto` routing AND
+            # the original choice wasn't already Faster-Whisper.
+            if args.engine is not None or spec.kind == EngineKind.FASTER_WHISPER:
+                raise
+            print(
+                f"WARNING: {exc}. Retrying with faster_whisper.",
+                file=sys.stderr,
+            )
+            try:
+                engine.unload()
+            except Exception:  # pragma: no cover
+                pass
+            spec = EngineRouter.select(info, prefer=EngineKind.FASTER_WHISPER)
+            print(
+                f"Device: {info.name} | {info.vram_gb:.1f} GB | "
+                f"Engine: {spec.kind.value} ({spec.compute_type}, batch={spec.batch_size})",
+                file=sys.stderr,
+            )
+            engine = build_engine(spec)
+            engine.load()
+
         extra_kwargs: dict = {"word_timestamps": args.word_timestamps}
         if args.beam_size is not None:
             extra_kwargs["beam_size"] = args.beam_size

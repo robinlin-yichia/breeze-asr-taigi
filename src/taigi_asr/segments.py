@@ -23,17 +23,30 @@ class TimestampedSegment:
 
         None / negative are clamped to zero to keep formatters defensive against
         upstream decoder quirks (Whisper sometimes emits None timestamps).
+
+        Carries millisecond overflow into minutes/hours so values like 59.9996
+        don't render as an invalid ``HH:MM:60,000``.
         """
         if seconds is None or seconds < 0:
             seconds = 0.0
 
+        if srt_format:
+            # Round to the nearest millisecond, then decompose — avoids the
+            # float-formatting "60.000" overflow when input is epsilon below 60.
+            total_ms = int(round(seconds * 1000))
+            ms = total_ms % 1000
+            total_s = total_ms // 1000
+            s = total_s % 60
+            total_m = total_s // 60
+            m = total_m % 60
+            h = total_m // 60
+            return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+        # Wall clock: truncate seconds (matches prior behaviour).
         hours = int(seconds // 3600)
         minutes = int((seconds % 3600) // 60)
-        secs = seconds % 60
-
-        if srt_format:
-            return f"{hours:02d}:{minutes:02d}:{secs:06.3f}".replace(".", ",")
-        return f"{hours:02d}:{minutes:02d}:{int(secs):02d}"
+        secs = int(seconds % 60)
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
     def to_timestamp_line(self) -> str:
         start = self.format_time(self.start_time)

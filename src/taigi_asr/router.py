@@ -7,10 +7,28 @@ decision table.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from enum import Enum
 
 from taigi_asr.errors import InsufficientVRAMError
+
+
+def _bitsandbytes_available() -> bool:
+    """Gate HF int8 path to platforms where bitsandbytes actually runs.
+
+    bitsandbytes ships Linux-only CUDA binaries; on Windows the import raises
+    at runtime. The router checks both platform AND import so a user who
+    installed a community Windows wheel can still opt in.
+    """
+    if sys.platform not in ("linux", "linux2"):
+        return False
+    try:
+        import bitsandbytes  # noqa: F401
+
+        return True
+    except Exception:
+        return False
 
 
 class EngineKind(str, Enum):
@@ -152,7 +170,13 @@ class EngineRouter:
         elif vram >= 10.0:
             batch, ct = 4, "float16"
         elif vram >= 6.0:
-            batch, ct = 2, "int8"  # bitsandbytes 8-bit (Linux only)
+            # bitsandbytes 8-bit is Linux-only; without it the HF path OOMs on
+            # 6-10 GB cards. Use fp16 batch=1 instead — slower, but at least
+            # runs on Windows.
+            if _bitsandbytes_available():
+                batch, ct = 2, "int8"
+            else:
+                batch, ct = 1, "float16"
         else:
             batch, ct = 1, "float16"  # 4 GB dGPU: aggressive low-mem
         return EngineSpec(

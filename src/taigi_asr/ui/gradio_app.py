@@ -179,12 +179,14 @@ def _transcribe(
 
 
 _OUTPUT_DIRS: list[Path] = []
+_OUTPUT_DIRS_LOCK = threading.Lock()
 
 
 def _cleanup_output_dirs() -> None:
-    while _OUTPUT_DIRS:
-        d = _OUTPUT_DIRS.pop()
-        shutil.rmtree(d, ignore_errors=True)
+    with _OUTPUT_DIRS_LOCK:
+        while _OUTPUT_DIRS:
+            d = _OUTPUT_DIRS.pop()
+            shutil.rmtree(d, ignore_errors=True)
 
 
 atexit.register(_cleanup_output_dirs)
@@ -197,12 +199,15 @@ def _write_outputs(
 
     Directories are tracked and deleted on process exit via ``atexit``. Also
     trims to the last 5 sessions so a long-running server doesn't fill disk.
+    Gradio can serve concurrent requests -- guard append/pop with a lock so
+    racing ``len()``/``pop(0)`` calls don't raise or delete the wrong dir.
     """
     out_dir = Path(tempfile.mkdtemp(prefix="taigi_asr_"))
-    _OUTPUT_DIRS.append(out_dir)
-    while len(_OUTPUT_DIRS) > 5:
-        old = _OUTPUT_DIRS.pop(0)
-        shutil.rmtree(old, ignore_errors=True)
+    with _OUTPUT_DIRS_LOCK:
+        _OUTPUT_DIRS.append(out_dir)
+        while len(_OUTPUT_DIRS) > 5:
+            old = _OUTPUT_DIRS.pop(0)
+            shutil.rmtree(old, ignore_errors=True)
     paths: dict[str, str] = {}
     if "SRT" in formats:
         p = out_dir / "transcript.srt"

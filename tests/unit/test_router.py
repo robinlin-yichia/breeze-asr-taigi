@@ -9,6 +9,14 @@ import pytest
 from taigi_asr.router import EngineKind, EngineRouter, EngineSpec, GPUInfo, GPUProfiler
 
 
+@pytest.fixture(autouse=True)
+def _force_no_bnb(monkeypatch):
+    """Pretend bitsandbytes is unavailable so tests are deterministic across
+    Windows/Linux. Tests that want to exercise the int8 path patch it themselves.
+    """
+    monkeypatch.setattr("taigi_asr.router._bitsandbytes_available", lambda: False)
+
+
 class TestGPUProfiler:
     def test_cpu_only_when_no_cuda(self) -> None:
         with patch("torch.cuda.is_available", return_value=False):
@@ -40,8 +48,10 @@ class TestEngineRouter:
             (2.0, True, EngineKind.FASTER_WHISPER, "int8_float16"),  # tiny GPU
             (3.84, True, EngineKind.FASTER_WHISPER, "int8_float16"),  # RTX 3050 Laptop (Windows)
             (4.0, True, EngineKind.FASTER_WHISPER, "int8_float16"),  # 4 GB exact
-            (6.0, True, EngineKind.HUGGINGFACE, "int8"),  # 6GB -> HF int8
-            (8.0, True, EngineKind.HUGGINGFACE, "int8"),  # 8GB -> HF int8 (fp16 too tight)
+            # 6-10 GB: without bitsandbytes (the default in this test via
+            # the autouse fixture) the router falls back to fp16 batch=1.
+            (6.0, True, EngineKind.HUGGINGFACE, "float16"),
+            (8.0, True, EngineKind.HUGGINGFACE, "float16"),
             (12.0, True, EngineKind.HUGGINGFACE, "float16"),  # 12GB -> fp16
             (24.0, True, EngineKind.HUGGINGFACE, "float16"),  # L4/A100 -> HF fp16
         ],
@@ -81,6 +91,21 @@ class TestEngineRouter:
         big = GPUInfo(name="A100", vram_gb=40.0, cuda_available=True, bf16_supported=True)
         assert EngineRouter.select(small).batch_size <= 4
         assert EngineRouter.select(big).batch_size >= 16
+
+    def test_hf_int8_only_selected_when_bitsandbytes_available(self, monkeypatch) -> None:
+        """Copilot review #1: on Linux with bitsandbytes installed, 6-10 GB
+        cards should pick the int8 path; without it they fall back to fp16."""
+        info = GPUInfo(name="RTX 4060", vram_gb=8.0, cuda_available=True, bf16_supported=False)
+        # With bnb present
+        monkeypatch.setattr("taigi_asr.router._bitsandbytes_available", lambda: True)
+        spec = EngineRouter.select(info)
+        assert spec.kind is EngineKind.HUGGINGFACE
+        assert spec.compute_type == "int8"
+        # Without bnb (simulating Windows)
+        monkeypatch.setattr("taigi_asr.router._bitsandbytes_available", lambda: False)
+        spec = EngineRouter.select(info)
+        assert spec.kind is EngineKind.HUGGINGFACE
+        assert spec.compute_type == "float16"
 
 
 class TestEngineSpec:

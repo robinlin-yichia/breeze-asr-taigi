@@ -1,8 +1,10 @@
 """Audio ingest and normalization.
 
-Converts any ffmpeg-readable audio/video into 16 kHz mono PCM s16le WAV — the format
-Whisper / faster-whisper expect. Falls back to pydub (pure-Python decode via libavcodec
-bindings) when the ffmpeg CLI is unavailable.
+Converts ffmpeg-readable audio/video into 16 kHz mono PCM s16le WAV -- the format
+Whisper / faster-whisper expect. When the ffmpeg CLI is unavailable or fails, the
+module falls back to ``pydub``; note that pydub itself still relies on an external
+ffmpeg/libav-compatible decoder backend, so a working ffmpeg install remains the
+reliable path on every platform.
 """
 
 from __future__ import annotations
@@ -36,30 +38,35 @@ class AudioConverter:
         os.close(fd)
         wav_path = Path(raw)
 
-        if shutil.which("ffmpeg"):
-            cmd = [
-                "ffmpeg",
-                "-y",
-                "-threads",
-                str(os.cpu_count() or 4),
-                "-i",
-                str(src),
-                "-ar",
-                str(AudioConverter.TARGET_SR),
-                "-ac",
-                "1",
-                "-c:a",
-                "pcm_s16le",
-                "-loglevel",
-                "error",
-                str(wav_path),
-            ]
-            try:
-                subprocess.run(cmd, check=True, capture_output=True)
-            except subprocess.CalledProcessError:
+        try:
+            if shutil.which("ffmpeg"):
+                cmd = [
+                    "ffmpeg",
+                    "-y",
+                    "-threads",
+                    str(os.cpu_count() or 4),
+                    "-i",
+                    str(src),
+                    "-ar",
+                    str(AudioConverter.TARGET_SR),
+                    "-ac",
+                    "1",
+                    "-c:a",
+                    "pcm_s16le",
+                    "-loglevel",
+                    "error",
+                    str(wav_path),
+                ]
+                try:
+                    subprocess.run(cmd, check=True, capture_output=True)
+                except subprocess.CalledProcessError:
+                    AudioConverter._convert_via_pydub(src, wav_path)
+            else:
                 AudioConverter._convert_via_pydub(src, wav_path)
-        else:
-            AudioConverter._convert_via_pydub(src, wav_path)
+        except Exception:
+            # Conversion blew up in both paths — don't leak the empty temp wav.
+            AudioConverter.cleanup(wav_path)
+            raise
 
         try:
             import soundfile as sf

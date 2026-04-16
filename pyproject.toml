@@ -38,8 +38,12 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
+    # NOTE: `torch` is deliberately NOT listed here. Users must install the
+    # correct CUDA/CPU wheel themselves from https://pytorch.org/ (or the
+    # install.{sh,bat} / Dockerfile in this repo). Adding torch here would
+    # pull the CPU wheel by default on `pip install`, silently defeating the
+    # GPU optimisation this project is built for.
     "faster-whisper>=1.1.0",
-    "torch>=2.1",
     "soundfile>=0.12",
     "pydub>=0.25",
     "numpy>=1.24",
@@ -48,6 +52,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Users who explicitly want a CPU install can opt in with `pip install .[cpu-torch]`.
+cpu-torch = ["torch>=2.1"]
 hf = [
     "transformers>=4.40",
     "accelerate>=0.30",

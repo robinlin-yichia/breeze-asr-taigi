@@ -8,10 +8,14 @@
 
 ```bash
 pip uninstall -y torch
-pip install torch --index-url https://download.pytorch.org/whl/cu124
+pip install torch --index-url https://download.pytorch.org/whl/cu121
 # Verify:
 python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
+
+> The repo's `install.{sh,bat}` and the `Dockerfile` all target CUDA 12.1 wheels
+> for consistency. If your driver only supports a different CUDA minor version,
+> pick the matching wheel from <https://pytorch.org/get-started/locally/>.
 
 If `nvidia-smi` works but torch still says no CUDA:
 - Check NVIDIA driver version >= 525 (CUDA 12.x requires modern driver).

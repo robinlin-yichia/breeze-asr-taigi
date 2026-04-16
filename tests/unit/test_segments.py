@@ -50,6 +50,21 @@ class TestFormatTime:
         assert seg.format_time(-5.0) == "00:00:00"
         assert seg.format_time(None) == "00:00:00"  # type: ignore[arg-type]
 
+    def test_srt_rounding_does_not_overflow_seconds(self) -> None:
+        """59.9996 must never render as HH:MM:60,000 (invalid SRT).
+
+        Regression for Copilot review #7: earlier `f"{secs:06.3f}"` formatting
+        rounded values epsilon below 60 up to ``60.000``.
+        """
+        seg = TimestampedSegment(0, 1, "x")
+        # epsilon below 60 seconds -> should roll into the minute
+        assert seg.format_time(59.9996, srt_format=True) == "00:01:00,000"
+        # epsilon below an hour -> should roll into the hour
+        assert seg.format_time(3599.9996, srt_format=True) == "01:00:00,000"
+        # exact boundary still clean
+        assert seg.format_time(59.999, srt_format=True) == "00:00:59,999"
+        assert seg.format_time(60.0, srt_format=True) == "00:01:00,000"
+
 
 class TestTimestampLine:
     def test_basic(self) -> None:
