@@ -74,15 +74,20 @@ jobs:
           uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu
           uv pip install --system -e ".[dev]"
 
-      - name: Run unit + smoke tests
+      - name: Run unit + smoke + fast integration tests
         shell: bash
         run: |
+          # tests/integration includes mock-only flows (test_cli_main.py)
+          # alongside real-model flows tagged ``slow``. ``-m "not slow"``
+          # excludes the latter so CI doesn't try to download the ~3 GB
+          # Breeze-ASR-26 weights on every push.
           if [ "${{ matrix.os }}" = "ubuntu-latest" ] && [ "${{ matrix.python-version }}" = "3.11" ]; then
             # Primary cell: coverage + xml report for codecov upload.
-            pytest tests/unit tests/smoke -v --cov=taigi_asr --cov-report=xml
+            pytest tests/unit tests/smoke tests/integration -v -m "not slow" \
+              --cov=taigi_asr --cov-report=xml
           else
             # Secondary cells: skip coverage overhead; we only upload from one cell.
-            pytest tests/unit tests/smoke -v
+            pytest tests/unit tests/smoke tests/integration -v -m "not slow"
           fi
 
       - name: Upload coverage to Codecov
