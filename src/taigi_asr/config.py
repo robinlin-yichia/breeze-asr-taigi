@@ -16,6 +16,27 @@ HF_CACHE_DIR: Path = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "hu
 TARGET_SAMPLE_RATE = 16000
 TARGET_CHANNELS = 1
 
+# Audio/video container extensions the ``--input-dir`` glob auto-picks up.
+# This is a UX whitelist for the directory-scan flow only — anything ffmpeg
+# can decode still works when passed positionally on the command line.
+# Lowercase by convention; matching against ``Path.suffix.lower()``.
+SUPPORTED_AUDIO_EXTS: frozenset[str] = frozenset(
+    {
+        ".mp3",
+        ".m4a",
+        ".wav",
+        ".flac",
+        ".ogg",
+        ".webm",
+        ".mp4",
+        ".mkv",
+        ".mov",
+        ".aac",
+        ".opus",
+        ".wma",
+    }
+)
+
 # Inference defaults
 DEFAULT_BEAM_SIZE = 5
 # Practical ceiling for RTX 3050 4 GB + int8_float16 model (~2.9 GB). Beam widths

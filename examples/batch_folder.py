@@ -17,16 +17,15 @@ import time
 from pathlib import Path
 
 from taigi_asr.audio import AudioConverter
+from taigi_asr.config import SUPPORTED_AUDIO_EXTS
 from taigi_asr.engines import build_engine
 from taigi_asr.formatters import to_srt
 from taigi_asr.router import EngineRouter, GPUProfiler
 
-AUDIO_EXTS = {".m4a", ".mp3", ".wav", ".mp4", ".mov", ".mkv", ".flac", ".ogg", ".webm"}
-
 
 def main(folder: str) -> None:
     root = Path(folder)
-    files = sorted(p for p in root.iterdir() if p.suffix.lower() in AUDIO_EXTS)
+    files = sorted(p for p in root.iterdir() if p.suffix.lower() in SUPPORTED_AUDIO_EXTS)
     if not files:
         print(f"No audio files in {root}")
         sys.exit(1)

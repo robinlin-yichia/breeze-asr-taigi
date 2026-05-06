@@ -14,27 +14,11 @@ from pathlib import Path
 
 from taigi_asr import __version__
 from taigi_asr.audio import AudioConverter
+from taigi_asr.config import SUPPORTED_AUDIO_EXTS
 from taigi_asr.engines import build_engine
 from taigi_asr.errors import InsufficientVRAMError, TaigiASRError
 from taigi_asr.formatters import to_json, to_srt, to_txt, to_vtt
 from taigi_asr.router import EngineKind, EngineRouter, GPUProfiler
-
-# Extensions ffmpeg can decode that we'll auto-pick from --input-dir.
-# Limited to common audio/video containers; users can still pass arbitrary
-# files explicitly as positional args.
-_AUDIO_EXTS = {
-    ".mp3",
-    ".m4a",
-    ".wav",
-    ".flac",
-    ".ogg",
-    ".webm",
-    ".mp4",
-    ".mkv",
-    ".aac",
-    ".opus",
-    ".wma",
-}
 
 
 def _parse_engine(raw: str) -> EngineKind | None:
@@ -70,7 +54,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Add every supported audio/video file in this directory to the batch "
-            f"(extensions: {', '.join(sorted(_AUDIO_EXTS))}). Non-recursive."
+            f"(extensions: {', '.join(sorted(SUPPORTED_AUDIO_EXTS))}). Non-recursive."
         ),
     )
     # TAIGI_ASR_DEFAULT_ENGINE lets the user flip the default engine per
@@ -147,7 +131,7 @@ def _resolve_inputs(positional: list[Path], input_dir: Path | None) -> list[Path
         if not input_dir.is_dir():
             raise NotADirectoryError(f"--input-dir is not a directory: {input_dir}")
         for child in sorted(input_dir.iterdir()):
-            if child.is_file() and child.suffix.lower() in _AUDIO_EXTS:
+            if child.is_file() and child.suffix.lower() in SUPPORTED_AUDIO_EXTS:
                 _add(child)
 
     return resolved
@@ -167,43 +151,36 @@ def _render(segments, fmt: str, meta: dict) -> str:
 
 def _transcribe_one(
     engine,
-    spec,
     audio: Path,
     formats: list[str],
-    out_override: Path | None,
-    *,
-    word_timestamps: bool,
-    beam_size: int | None,
-    best_of: int | None,
-    write_alongside_only: bool,
+    single_out_path: Path | None,
+    transcribe_kwargs: dict,
+    meta_base: dict,
 ) -> tuple[bool, float, float]:
     """Run convert + transcribe + render for one input.
 
-    Returns ``(ok, duration_sec, elapsed_sec)``. Caller decides how to
-    aggregate failures across the batch — we only print and return False.
+    Returns ``(ok, duration_sec, elapsed_sec)``.
+
+    Failed files preserve the real audio duration whenever it was determined
+    (transcribe failures, empty transcripts) — only convert failures report
+    0.0, since duration is undetermined when the source can't be decoded.
+    The caller decides whether to credit failed files toward aggregate xRT.
+
+    ``single_out_path`` is ``None`` for the multi-format / multi-file case
+    (write each format alongside the input) or a concrete path for the
+    single-input + single-format ``--out`` override case. The caller has
+    already validated the latter — this function does not double-check.
     """
     t0 = time.monotonic()
     wav_path: Path | None = None
+    duration = 0.0
     try:
         wav_path, duration = AudioConverter.convert(audio)
         print(f"Audio duration: {duration:.1f} s", file=sys.stderr)
-
-        extra: dict = {"word_timestamps": word_timestamps}
-        if spec.kind is EngineKind.FASTER_WHISPER:
-            if beam_size is not None:
-                extra["beam_size"] = beam_size
-            if best_of is not None:
-                extra["best_of"] = best_of
-        elif beam_size is not None or best_of is not None:
-            print(
-                "WARNING: --beam-size / --best-of are ignored on the HuggingFace engine.",
-                file=sys.stderr,
-            )
-
-        segments = engine.transcribe(wav_path, **extra)
+        segments = engine.transcribe(wav_path, **transcribe_kwargs)
     except TaigiASRError as exc:
         print(f"ERROR [{audio.name}]: {exc}", file=sys.stderr)
-        return False, 0.0, time.monotonic() - t0
+        return False, duration, time.monotonic() - t0
     finally:
         if wav_path is not None:
             AudioConverter.cleanup(wav_path)
@@ -212,16 +189,11 @@ def _transcribe_one(
         print(f"WARNING [{audio.name}]: empty transcript", file=sys.stderr)
         return False, duration, time.monotonic() - t0
 
-    meta = {
-        "engine": spec.kind.value,
-        "compute_type": spec.compute_type,
-        "duration_sec": round(duration, 2),
-    }
+    meta = {**meta_base, "duration_sec": round(duration, 2)}
 
-    if (not write_alongside_only) and out_override is not None and len(formats) == 1:
-        out_path = out_override
-        out_path.write_text(_render(segments, formats[0], meta), encoding="utf-8")
-        print(f"[OK] Saved: {out_path}", file=sys.stderr)
+    if single_out_path is not None:
+        single_out_path.write_text(_render(segments, formats[0], meta), encoding="utf-8")
+        print(f"[OK] Saved: {single_out_path}", file=sys.stderr)
     else:
         for fmt in formats:
             out_path = audio.with_suffix(f".{fmt}")
@@ -282,11 +254,31 @@ def main(argv: list[str] | None = None) -> int:
         file=sys.stderr,
     )
 
-    write_alongside_only = len(inputs) > 1 or len(formats) > 1
-    if args.out is not None and write_alongside_only:
+    # `--out` is the single-target sentinel: honored only when there's exactly
+    # one input and exactly one format. Resolve once up-front so _transcribe_one
+    # stays dumb (Path | None) and we don't re-derive the condition per file.
+    single_out_path: Path | None = None
+    if len(inputs) == 1 and len(formats) == 1 and args.out is not None:
+        single_out_path = args.out
+    elif args.out is not None:
         print(
             "WARNING: --out ignored when multiple inputs or formats are requested; "
             "outputs will be written alongside each input.",
+            file=sys.stderr,
+        )
+
+    # Engine-specific knob filtering. Done ONCE here (not per-file) so a
+    # 50-file batch with `--engine hf --beam-size 10` doesn't spam 50
+    # identical "ignored on HF engine" warnings.
+    transcribe_kwargs: dict = {"word_timestamps": args.word_timestamps}
+    if spec.kind is EngineKind.FASTER_WHISPER:
+        if args.beam_size is not None:
+            transcribe_kwargs["beam_size"] = args.beam_size
+        if args.best_of is not None:
+            transcribe_kwargs["best_of"] = args.best_of
+    elif args.beam_size is not None or args.best_of is not None:
+        print(
+            "WARNING: --beam-size / --best-of are ignored on the HuggingFace engine.",
             file=sys.stderr,
         )
 
@@ -320,32 +312,33 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 4
 
+    meta_base = {"engine": spec.kind.value, "compute_type": spec.compute_type}
+
     failed: list[Path] = []
-    total_duration = 0.0
-    total_elapsed = 0.0
+    # Aggregate stats count *successful* files only — failed files have
+    # undefined or partial elapsed/duration that would distort xRT and
+    # mislead the user about real throughput.
+    success_duration = 0.0
+    success_elapsed = 0.0
     try:
         for idx, audio in enumerate(inputs, 1):
             if len(inputs) > 1:
                 print(f"\n[{idx}/{len(inputs)}] {audio}", file=sys.stderr)
             ok, duration, elapsed = _transcribe_one(
                 engine,
-                spec,
                 audio,
                 formats,
-                args.out,
-                word_timestamps=args.word_timestamps,
-                beam_size=args.beam_size,
-                best_of=args.best_of,
-                write_alongside_only=write_alongside_only,
+                single_out_path,
+                transcribe_kwargs,
+                meta_base,
             )
-            total_duration += duration
-            total_elapsed += elapsed
-            if len(inputs) > 1 and ok:
-                # xRT here is per-file convert+transcribe wall-clock vs audio
-                # duration. Excludes the one-time model load.
-                xrt = duration / max(elapsed, 1e-3)
-                print(f"  -> {elapsed:.1f}s (xRT {xrt:.1f})", file=sys.stderr)
-            if not ok:
+            if ok:
+                success_duration += duration
+                success_elapsed += elapsed
+                if len(inputs) > 1:
+                    xrt = duration / max(elapsed, 1e-3)
+                    print(f"  -> {elapsed:.1f}s (xRT {xrt:.1f})", file=sys.stderr)
+            else:
                 failed.append(audio)
     finally:
         try:
@@ -354,13 +347,20 @@ def main(argv: list[str] | None = None) -> int:
             pass
 
     if len(inputs) > 1:
-        agg_xrt = total_duration / max(total_elapsed, 1e-3)
-        print(
-            f"\nBatch summary: {len(inputs) - len(failed)}/{len(inputs)} OK | "
-            f"audio {total_duration:.0f}s | wall {total_elapsed:.0f}s | "
-            f"xRT {agg_xrt:.1f} (excl. model load)",
-            file=sys.stderr,
-        )
+        ok_count = len(inputs) - len(failed)
+        if success_duration > 0:
+            agg_xrt = success_duration / max(success_elapsed, 1e-3)
+            print(
+                f"\nBatch summary: {ok_count}/{len(inputs)} OK | "
+                f"audio {success_duration:.0f}s | wall {success_elapsed:.0f}s | "
+                f"xRT {agg_xrt:.1f} (excl. model load)",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"\nBatch summary: {ok_count}/{len(inputs)} OK (no successful transcriptions)",
+                file=sys.stderr,
+            )
 
     if failed:
         print(

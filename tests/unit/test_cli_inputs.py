@@ -12,7 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from taigi_asr.cli import _AUDIO_EXTS, _resolve_inputs
+from taigi_asr.cli import _resolve_inputs
+from taigi_asr.config import SUPPORTED_AUDIO_EXTS
 
 
 def _touch(path: Path) -> Path:
@@ -108,5 +109,13 @@ def test_empty_dir_returns_empty_list(tmp_path: Path) -> None:
 def test_audio_ext_whitelist_is_lowercase() -> None:
     # If anyone adds an uppercase entry the case-insensitive matching breaks
     # silently — guard against that with a tiny invariant test.
-    for ext in _AUDIO_EXTS:
-        assert ext == ext.lower(), f"_AUDIO_EXTS must be lowercase: {ext}"
+    for ext in SUPPORTED_AUDIO_EXTS:
+        assert ext == ext.lower(), f"SUPPORTED_AUDIO_EXTS must be lowercase: {ext}"
+
+
+def test_audio_ext_whitelist_starts_with_dot() -> None:
+    # ``Path.suffix`` always returns the extension *with* the leading dot.
+    # If someone forgets the dot the membership check will silently never
+    # match — catch that here.
+    for ext in SUPPORTED_AUDIO_EXTS:
+        assert ext.startswith("."), f"SUPPORTED_AUDIO_EXTS entries need leading dot: {ext}"
