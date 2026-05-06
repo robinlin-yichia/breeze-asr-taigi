@@ -1,7 +1,10 @@
 """Batch-transcribe every audio file in a folder, reusing one loaded engine.
 
-Key point: load the model ONCE (~8s), then reuse for every file. The router
-+ factory path would re-build the engine per call if you're not careful.
+For typical use, prefer the CLI: ``taigi-asr --input-dir /path/to/folder``
+does the same thing with auto-routing, multi-format output, and per-file
+xRT reporting. This script stays as a programmatic-API reference: it
+illustrates the load-once / transcribe-many pattern that any custom
+application built on top of taigi_asr should follow.
 
 Run:
     python examples/batch_folder.py /path/to/folder

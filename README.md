@@ -60,22 +60,41 @@ docker compose up -d
 ## CLI 用法
 
 ```bash
+# 單檔
 taigi-asr data/test.m4a --format srt --out out.srt
 taigi-asr long_audio.mp3 --engine fw --beam-size 10 --word-timestamps
 taigi-asr interview.wav --format json --out interview.json -v
+
+# 多檔批次（模型只載入一次，省 ~9 秒 / 檔）
+taigi-asr a.mp3 b.m4a c.wav --format srt,txt
+taigi-asr --input-dir music/ --format srt,json
+taigi-asr clip1.mp3 --input-dir more_clips/ --format srt   # 兩種來源可混用
 ```
 
 CLI 選項：
 | 參數 | 預設 | 說明 |
 |---|---|---|
-| `audio` | — | 音檔路徑（必填） |
-| `--engine` | `auto` | `auto` / `fw` (faster-whisper) / `hf` (huggingface) |
-| `--format` | `srt` | `srt` / `txt` / `vtt` / `json` |
-| `--out` | 自動 | 輸出路徑 |
-| `--beam-size` | 5 | beam search 寬度（4GB GPU 建議 5-10） |
+| `audio` | — | 一或多個音檔路徑（多檔時模型只 load 一次） |
+| `--input-dir` | — | 把目錄內所有支援副檔名的音檔加入批次（非遞迴） |
+| `--engine` | `auto` | `auto` / `fw` (faster-whisper) / `hf` (huggingface)；可用 `TAIGI_ASR_DEFAULT_ENGINE` 環境變數覆蓋 |
+| `--format` | `srt` | `srt` / `txt` / `vtt` / `json`，多格式以逗號串接（例：`srt,txt,json`）|
+| `--out` | 自動 | 輸出路徑（**只在單檔 + 單格式時生效**；其他情況輸出落在輸入旁） |
+| `--beam-size` | 5 | beam search 寬度（4GB GPU 建議 5-10）|
 | `--best-of` | 5 | 溫度採樣候選數 |
-| `--word-timestamps` | False | 逐字時間戳記（較慢） |
+| `--word-timestamps` | False | 逐字時間戳記（較慢）|
 | `-v` / `-vv` | WARN | 增加 log 詳細度 |
+
+`--input-dir` 自動撈的副檔名：`.mp3`, `.m4a`, `.wav`, `.flac`, `.ogg`, `.webm`, `.mp4`, `.mkv`, `.aac`, `.opus`, `.wma`。其他格式（如 `.aiff`）只要 ffmpeg 認得，仍可走 positional 直接傳。
+
+退出碼：
+| 代碼 | 含義 |
+|---|---|
+| `0` | 全部成功 |
+| `2` | 找不到輸入檔 / `--input-dir` 不存在 / 沒給任何輸入 |
+| `3` | 偵測到的 VRAM 不足以跑指定的 engine |
+| `4` | 模型 load 失敗，或所有檔案皆失敗（含「轉錄為空」也計入失敗）|
+| `6` | `--format` 指定了未知格式 |
+| `7` | 多檔批次中部分檔案失敗（其他成功）|
 
 ## Python API
 
@@ -167,10 +186,9 @@ src/taigi_asr/
     launcher.py       # python -m taigi_asr.ui.launcher
   cli.py              # python -m taigi_asr.cli
 tests/
-  unit/               # 69 unit tests (CPU-only, <3s)
+  unit/               # unit tests (CPU-only, <3s)
   smoke/              # CLI + UI smoke tests
   integration/        # Real model on test.m4a (marked slow)
-legacy/               # 原始 Colab 腳本（保留參考用）
 ```
 
 ---

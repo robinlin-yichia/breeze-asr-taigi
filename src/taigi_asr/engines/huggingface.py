@@ -4,9 +4,6 @@ Runs MediaTek-Research/Breeze-ASR-26 directly via the
 ``AutomaticSpeechRecognitionPipeline``. Best on 8 GB+ GPUs; falls back to
 bitsandbytes 8-bit quantization for 6–8 GB. Below 6 GB the router should have
 already routed to :class:`FasterWhisperEngine` instead.
-
-Ported from the original Colab v6.1 script
-(``legacy/breeze_asr_26_台語轉錄器.py``).
 """
 
 from __future__ import annotations
