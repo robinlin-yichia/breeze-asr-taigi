@@ -1,7 +1,10 @@
 """Batch-transcribe every audio file in a folder, reusing one loaded engine.
 
-Key point: load the model ONCE (~8s), then reuse for every file. The router
-+ factory path would re-build the engine per call if you're not careful.
+For typical use, prefer the CLI: ``taigi-asr --input-dir /path/to/folder``
+does the same thing with auto-routing, multi-format output, and per-file
+xRT reporting. This script stays as a programmatic-API reference: it
+illustrates the load-once / transcribe-many pattern that any custom
+application built on top of taigi_asr should follow.
 
 Run:
     python examples/batch_folder.py /path/to/folder
@@ -14,16 +17,15 @@ import time
 from pathlib import Path
 
 from taigi_asr.audio import AudioConverter
+from taigi_asr.config import SUPPORTED_AUDIO_EXTS
 from taigi_asr.engines import build_engine
 from taigi_asr.formatters import to_srt
 from taigi_asr.router import EngineRouter, GPUProfiler
 
-AUDIO_EXTS = {".m4a", ".mp3", ".wav", ".mp4", ".mov", ".mkv", ".flac", ".ogg", ".webm"}
-
 
 def main(folder: str) -> None:
     root = Path(folder)
-    files = sorted(p for p in root.iterdir() if p.suffix.lower() in AUDIO_EXTS)
+    files = sorted(p for p in root.iterdir() if p.suffix.lower() in SUPPORTED_AUDIO_EXTS)
     if not files:
         print(f"No audio files in {root}")
         sys.exit(1)

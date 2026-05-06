@@ -3,9 +3,6 @@
 Uses the community pre-converted CTranslate2 build of MediaTek Breeze-ASR-26:
 ``paulpengtw/faster-whisper-Breeze-ASR-26``. With int8_float16 and batch_size=4
 the peak VRAM stays around 2.9 GB, leaving headroom on 4 GB laptop GPUs.
-
-Ported from the original Colab v8.0 script
-(``legacy/breeze_asr_26_fasterwhisper_台語轉錄器.py``).
 """
 
 from __future__ import annotations
@@ -92,10 +89,53 @@ class FasterWhisperEngine:
                     cpu_threads=self.cpu_threads,
                 )
                 self._batched = BatchedInferencePipeline(model=self._model)
+                self._prewarm()
                 self._loaded = True
                 log.info("Faster-Whisper engine loaded.")
             except Exception as exc:
                 raise ModelLoadError(f"Failed to load faster-whisper model: {exc}") from exc
+
+    def _prewarm(self) -> None:
+        """Force first-call CUDA / cuDNN / CTranslate2 kernel JIT to amortize.
+
+        The first ``transcribe()`` on a fresh CUDA context spends 1-2 s
+        compiling kernels and probing cuDNN heuristics. Running a 1 s dummy
+        clip here shifts that cost into ``load()`` so the first real file
+        already sees steady-state throughput. We use ``self.batch_size`` so
+        the kernels JIT'd here are exactly the ones the real workload will
+        hit (CT2 caches kernels per ``(compute_type, batch_size)`` shape).
+        ``vad_filter=False`` keeps the silent dummy in the pipeline instead
+        of being VAD-stripped to zero work.
+        """
+        if self.device == "cpu":
+            return
+        try:
+            import numpy as np
+
+            dummy = np.zeros(16000, dtype=np.float32)
+            seg_iter, _ = self._batched.transcribe(
+                dummy,
+                batch_size=self.batch_size,
+                language=DEFAULT_LANGUAGE,
+                beam_size=1,
+                best_of=1,
+                temperature=0.0,
+                vad_filter=False,
+                word_timestamps=False,
+                without_timestamps=True,
+            )
+            # Generator is lazy — must drain to actually run the kernels.
+            for _ in seg_iter:
+                pass
+            log.debug("Faster-Whisper pre-warm complete.")
+        except Exception as exc:
+            # Pre-warm failure must never abort load(). Surface as warning
+            # (not debug) so the operator can correlate it with a slower
+            # first transcribe — but the engine still loads and works.
+            log.warning(
+                "Pre-warm failed (%s); first transcribe will pay JIT cost.",
+                exc,
+            )
 
     def is_loaded(self) -> bool:
         return self._loaded
