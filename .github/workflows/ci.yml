@@ -115,7 +115,7 @@ jobs:
       # to the Dockerfile (i.e. PRs that only change CI yaml, docs, or tests).
       # The job still runs and reports green so required-check status stays
       # consistent — only the heavy steps below are gated.
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: changes
         with:
           filters: |
