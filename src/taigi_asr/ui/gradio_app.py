@@ -896,7 +896,7 @@ def build_ui() -> gr.Blocks:
         gr.HTML(
             '<div class="masthead">'
             '<div class="kanban">台語逐字稿</div>'
-            '<div class="sub">BREEZE-ASR-26 · 台語華語混講 · 語者標註 · 詞典校正</div>'
+            '<div class="sub">BREEZE-ASR-26 · 國語台語英文夾雜 · 語者標註 · 詞典校正</div>'
             "</div>"
         )
         gr.HTML(f'<div class="hwline">{hw}</div>')
