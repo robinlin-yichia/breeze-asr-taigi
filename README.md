@@ -6,6 +6,11 @@
 加上 [pyannote.audio](https://github.com/pyannote/pyannote-audio) 語者分離與可自訂的專有名詞詞典。
 輸出 SRT / TXT / VTT / JSON。
 
+**完全在本地運行** — 錄音不會離開你的電腦，沒有任何 API 計費或 token 費用。
+模型下載後即可離線轉錄。
+
+![深色版 UI](docs/img/ui-dark.png)
+
 > 本專案改作自 [thc1006/breeze-asr-taigi](https://github.com/thc1006/breeze-asr-taigi)（MIT License，
 > 原作者 蔡秀吉）。詳見文末「授權與來源」。
 
@@ -26,6 +31,8 @@
 - **台語／華語混講**都聽得懂（Whisper-large-v2 以約 10,000 小時台語資料微調）
 - **發言者自動分離**，同一人連續發言會合併成一段，時間只標在換人處
 - **專有名詞詞典**：教它人名、機構、術語怎麼寫，或把固定聽錯的詞替換掉
+- **全程本地推論、零使用費**：不呼叫任何雲端 API，錄音與逐字稿都留在自己機器上——
+  機密會議、個資訪談也能安心用
 - 2.5 小時的錄音約 **6 分鐘**跑完（RTX 3080 Ti）
 
 ### 適用場合
@@ -125,6 +132,11 @@ pip install -e ".[diar]"
 > community-1，少了它會在載入時噴 403。
 
 ### 3. 設定 token
+
+> **這個 token 是免費的，只作身分驗證用。** pyannote 的模型是 gated（下載前要
+> 在網頁上同意條款、留個聯絡方式），token 只是讓下載程式證明「你就是那個同意過
+> 條款的帳號」。**沒有任何計費**——模型下載下來之後，語者標註和轉錄一樣全在
+> 本地 GPU 上跑，不會呼叫 HuggingFace 的付費服務，離線也能用。
 
 到 <https://huggingface.co/settings/tokens> 產生一個 read 權限的 token，然後設成環境變數：
 

@@ -673,7 +673,13 @@ THEME_HEAD = """
 <script>
 (function () {
   var KEY = "taigi-theme";
-  function chosenDark() { return localStorage.getItem(KEY) === "dark"; }
+  function chosenDark() {
+    var stored = localStorage.getItem(KEY);
+    if (stored !== null) return stored === "dark";
+    // No saved preference: honour Gradio's ?__theme= URL parameter so a
+    // shared link (or a headless screenshot run) can pick the palette.
+    return new URLSearchParams(window.location.search).get("__theme") === "dark";
+  }
   function apply() {
     var dark = chosenDark();
     [document.documentElement, document.body].forEach(function (el) {
