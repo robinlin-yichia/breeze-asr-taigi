@@ -175,7 +175,7 @@ setx HF_TOKEN hf_xxxxxxxxxxxxxxxx
 |---|---|
 | ① 音檔 | 拖放。支援 m4a / mp3 / wav / mp4 / mov / mkv / flac / ogg / webm |
 | ② 轉錄模型 | 預設 Faster-Whisper，不用改 |
-| ③ 發言者 | 勾「標記發言者」會自動一起啟用詞級時間軸；已知人數可填「已知語者人數」，留 0 就自動判斷 |
+| ③ 發言者 | 勾「標記發言者」會自動一起啟用詞級時間軸；已知人數可填「已知語者人數」，留 0 就自動判斷。「語者改名」填 `SPEAKER_00=王經理`（一行一組），轉錄完再填、按「重新套用」即可換成真名，不必重跑 |
 | ④ 開始轉錄 | 進度會顯示在按鈕下方 |
 | ⑤ 詞典 | 需要時展開，改完可以直接重套，不必重跑轉錄 |
 
@@ -318,16 +318,13 @@ taigi-asr meeting.mp3 --no-terms
 CLI 轉錄時**同樣會套用詞彙表**（hotwords）——與 UI 行為一致，開頭會印出
 `Vocabulary bias: N terms from terms.json`。不想要就加 `--no-terms`。
 
-> CLI **不做語者標註**。要標發言者請用 UI，或用 `start-diarize.bat` 處理既有逐字稿。
+> CLI **不做語者標註**。要標發言者請用 UI。
 
 `fix_terms.py` 可以把詞典套用到既有的 srt / txt / json，不必重跑轉錄：
 
 ```bash
 python fix_terms.py outputs/meeting.srt
 ```
-
-`start-diarize.bat`（port 7861）是獨立的語者標註 UI，用途是替**既有的**逐字稿補標發言者
-（輸入＝音檔＋SRT/JSON）。一般情況用主 UI 一次做完即可。
 
 ---
 

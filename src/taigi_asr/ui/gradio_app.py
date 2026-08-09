@@ -241,11 +241,14 @@ def _reapply_terms(
     state: dict | None,
     enable_fix: bool,
     dict_path: str,
+    name_map_raw: str = "",
 ) -> tuple[str, str, str | None, str | None, str | None, str | None]:
     """Re-run the dictionary against the LAST transcription without re-decoding.
 
     Always restores the pristine ASR text first, so removing a rule reverts its
-    effect instead of leaving half-corrected text behind.
+    effect instead of leaving half-corrected text behind. Speaker renames work
+    the same way: the state keeps raw SPEAKER_NN labels and the current map is
+    applied fresh each time, so editing or clearing the map is always undoable.
     """
     if not state or not state.get("segments"):
         return ("ERROR: 尚無轉錄結果，請先執行一次轉錄。", "", None, None, None, None)
@@ -259,11 +262,13 @@ def _reapply_terms(
 
     fix_note = _apply_corrections(segments, dict_path) if enable_fix else "校正：已停用"
 
-    # Speaker labels survive untouched — diarization is never re-run here.
+    # Diarization is never re-run here — only the rename map is re-applied.
     speakers = state.get("speakers")
+    if speakers:
+        speakers = diar_mod.rename_speakers(speakers, diar_mod.parse_name_map(name_map_raw))
     outputs = _write_outputs(segments, state["formats"], meta=state["meta"], speakers=speakers)
     status = (
-        f"[OK] 已重新套用詞典（未重新轉錄／未重跑語者標註）／{len(segments)} 段 "
+        f"[OK] 已重新套用詞典與語者名稱（未重新轉錄／未重跑語者標註）／{len(segments)} 段 "
         f"/ {sum(len(s.text) for s in segments)} 字"
     )
     if fix_note:
@@ -464,6 +469,7 @@ def _transcribe(
     beam_size: int,
     enable_fix: bool = True,
     dict_path: str = "",
+    name_map_raw: str = "",
     progress: gr.Progress = gr.Progress(track_tqdm=True),
 ) -> tuple[str, str, str | None, str | None, str | None, str | None, dict | None]:
     """Core callback. Returns (status, preview, srt, txt, vtt, json, state)."""
@@ -535,6 +541,15 @@ def _transcribe(
             # than decoding the source a second time.
             speakers, diar_note = _run_diarization(wav_path, segments, num_speakers)
 
+        # State keeps the RAW labels; renaming happens at output time so the
+        # user can adjust the map afterwards and just re-apply.
+        raw_speakers = list(speakers)
+        name_map = diar_mod.parse_name_map(name_map_raw)
+        if speakers and name_map:
+            speakers = diar_mod.rename_speakers(speakers, name_map)
+            for raw_label, renamed in name_map.items():
+                diar_note = diar_note.replace(raw_label, renamed)
+
         fix_note = ""
         if enable_fix:
             progress(0.88, desc="套用專有名詞校正...")
@@ -570,7 +585,7 @@ def _transcribe(
             {
                 "segments": segments,
                 "raw": raw_texts,
-                "speakers": speakers,
+                "speakers": raw_speakers,
                 "meta": meta,
                 "formats": formats,
             },
@@ -947,6 +962,13 @@ def build_ui() -> gr.Blocks:
                         label="已知語者人數（0 = 自動判斷）",
                         visible=False,
                     )
+                    name_map_box = gr.Textbox(
+                        lines=3,
+                        label="語者改名（一行一組，轉錄完再填也行）",
+                        placeholder="SPEAKER_00=主持人\nSPEAKER_01=提問者",
+                        info="填好後按詞典區的「重新套用」即可換成真名，不必重跑轉錄或語者標註。",
+                        visible=False,
+                    )
                     word_ts = gr.Checkbox(
                         value=False,
                         label="詞級時間軸（句子從 ~25 秒切成 ~5 秒）",
@@ -997,10 +1019,10 @@ def build_ui() -> gr.Blocks:
             word_update = (
                 gr.update(value=True, interactive=False) if on else gr.update(interactive=True)
             )
-            return word_update, gr.update(visible=on)
+            return word_update, gr.update(visible=on), gr.update(visible=on)
 
         diarize_cb.change(
-            fn=_on_diarize_toggle, inputs=[diarize_cb], outputs=[word_ts, num_spk]
+            fn=_on_diarize_toggle, inputs=[diarize_cb], outputs=[word_ts, num_spk, name_map_box]
         )
 
         last_result = gr.State(None)
@@ -1094,12 +1116,12 @@ def build_ui() -> gr.Blocks:
                 dict_status = gr.Markdown(_reload_dict(_initial_path))
 
             reapply_btn = gr.Button(
-                "重新套用詞典到上次的轉錄結果（不必重跑轉錄／不必重跑語者標註）",
+                "重新套用詞典與語者名稱到上次的轉錄結果（不必重跑轉錄／語者標註）",
                 variant="secondary",
             )
             gr.Markdown(
-                "*每次都會從原始辨識文字重新套用，所以刪掉規則也會還原。"
-                "語者標籤會原樣保留。*"
+                "*每次都會從原始辨識文字與原始語者標籤重新套用，所以刪掉規則、"
+                "改掉或清空語者改名都會如實反映。*"
             )
 
         reload_btn.click(
@@ -1180,6 +1202,7 @@ def build_ui() -> gr.Blocks:
                 beam_slider,
                 enable_fix,
                 dict_path_box,
+                name_map_box,
             ],
             outputs=[
                 status_md,
@@ -1194,7 +1217,7 @@ def build_ui() -> gr.Blocks:
 
         reapply_btn.click(
             fn=_reapply_terms,
-            inputs=[last_result, enable_fix, dict_path_box],
+            inputs=[last_result, enable_fix, dict_path_box, name_map_box],
             outputs=[status_md, preview_md, dl_srt, dl_txt, dl_vtt, dl_json],
         )
 

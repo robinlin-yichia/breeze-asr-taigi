@@ -1,8 +1,6 @@
 """Speaker diarization — pyannote.audio wrapped for in-process use.
 
-Lives in the package (rather than only in the standalone ``diarize_app.py``)
-so the transcription UI can label speakers directly, without shelling out to
-a second interpreter.
+Used by the transcription UI to label speakers directly in-process.
 
 Requires a HuggingFace token and accepted licences for
 ``pyannote/speaker-diarization-3.1``, ``pyannote/segmentation-3.0`` and
@@ -219,6 +217,35 @@ def diarize(
         (turn.start, turn.end, label)
         for turn, _track, label in annotation.itertracks(yield_label=True)
     ]
+
+
+def parse_name_map(raw: str) -> dict[str, str]:
+    """Parse ``SPEAKER_00=王經理`` lines into a rename mapping.
+
+    One pair per line; fullwidth ＝ is accepted, blank lines and lines
+    without a separator are ignored. Values are stripped; an empty value
+    drops the line rather than renaming to nothing.
+    """
+    mapping: dict[str, str] = {}
+    for line in (raw or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        for sep in ("=", "＝"):
+            if sep in line:
+                key, value = line.split(sep, 1)
+                key, value = key.strip(), value.strip()
+                if key and value:
+                    mapping[key] = value
+                break
+    return mapping
+
+
+def rename_speakers(speakers: Sequence[str], mapping: dict[str, str]) -> list[str]:
+    """Apply a name map; labels without an entry pass through unchanged."""
+    if not mapping:
+        return list(speakers)
+    return [mapping.get(s, s) if s else s for s in speakers]
 
 
 def assign(
