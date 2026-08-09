@@ -108,6 +108,11 @@ def fake_cli(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
             bf16_supported=False,
         )
 
+        # Hermetic: the CLI auto-discovers terms.json from cwd/project root and
+        # injects vocabulary hotwords. A developer's personal dictionary must
+        # not leak into test assertions.
+        monkeypatch.setattr("taigi_asr.cli.terms_mod.find_default_dict", lambda: None)
+
         monkeypatch.setattr("taigi_asr.cli.GPUProfiler.detect", staticmethod(lambda: info))
         monkeypatch.setattr(
             "taigi_asr.cli.EngineRouter.select",

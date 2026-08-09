@@ -30,7 +30,12 @@ class FakeEngine:
         wav_path: str | Path,
         *,
         word_timestamps: bool = False,
+        **_engine_kwargs: object,
     ) -> list[TimestampedSegment]:
+        # Concrete engines take extra knobs beyond the Protocol (beam_size,
+        # hotwords, ...). Swallow them so tests substituting this double for a
+        # FASTER_WHISPER spec don't explode on kwargs the caller legitimately
+        # passes to the real engine.
         if not self._loaded:
             raise RuntimeError("FakeEngine.transcribe called before load().")
         self.call_count += 1

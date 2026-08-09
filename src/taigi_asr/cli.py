@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 from taigi_asr import __version__
+from taigi_asr import terms as terms_mod
 from taigi_asr.audio import AudioConverter
 from taigi_asr.config import SUPPORTED_AUDIO_EXTS
 from taigi_asr.engines import build_engine
@@ -83,7 +84,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--word-timestamps",
         action="store_true",
-        help="Emit word-level timestamps (slower)",
+        help="Split lines at word boundaries (~5 s instead of ~25 s). Free on "
+        "faster-whisper; much slower on the HuggingFace engine.",
     )
     parser.add_argument(
         "--beam-size",
@@ -96,6 +98,11 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Number of candidates for temperature fallback sampling (default 5)",
+    )
+    parser.add_argument(
+        "--no-terms",
+        action="store_true",
+        help="Skip the term dictionary's vocabulary bias (hotwords from terms.json)",
     )
     parser.add_argument("--verbose", "-v", action="count", default=0)
     parser.add_argument("--version", action="version", version=f"taigi-asr {__version__}")
@@ -276,6 +283,19 @@ def main(argv: list[str] | None = None) -> int:
             transcribe_kwargs["beam_size"] = args.beam_size
         if args.best_of is not None:
             transcribe_kwargs["best_of"] = args.best_of
+        # Same vocabulary bias the UI applies: names/jargon from the term
+        # dictionary steer decoding before it goes wrong. UI-only application
+        # would silently give CLI users worse transcripts than the UI.
+        vocab_path = None if args.no_terms else terms_mod.find_default_dict()
+        if vocab_path is not None:
+            hotwords = terms_mod.as_hotwords(terms_mod.load_vocabulary(vocab_path))
+            if hotwords:
+                transcribe_kwargs["hotwords"] = hotwords
+                print(
+                    f"Vocabulary bias: {len(hotwords.split('、'))} terms "
+                    f"from {Path(vocab_path).name}",
+                    file=sys.stderr,
+                )
     elif args.beam_size is not None or args.best_of is not None:
         print(
             "WARNING: --beam-size / --best-of are ignored on the HuggingFace engine.",

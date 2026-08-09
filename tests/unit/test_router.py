@@ -48,12 +48,13 @@ class TestEngineRouter:
             (2.0, True, EngineKind.FASTER_WHISPER, "int8_float16"),  # tiny GPU
             (3.84, True, EngineKind.FASTER_WHISPER, "int8_float16"),  # RTX 3050 Laptop (Windows)
             (4.0, True, EngineKind.FASTER_WHISPER, "int8_float16"),  # 4 GB exact
-            # 6-10 GB: without bitsandbytes (the default in this test via
-            # the autouse fixture) the router falls back to fp16 batch=1.
-            (6.0, True, EngineKind.HUGGINGFACE, "float16"),
-            (8.0, True, EngineKind.HUGGINGFACE, "float16"),
-            (12.0, True, EngineKind.HUGGINGFACE, "float16"),  # 12GB -> fp16
-            (24.0, True, EngineKind.HUGGINGFACE, "float16"),  # L4/A100 -> HF fp16
+            # Auto never picks HF, however much VRAM is available: the HF path
+            # is ~17x slower for slightly less text, and its word-timestamp
+            # alignment OOMs on long recordings. See EngineRouter.select.
+            (6.0, True, EngineKind.FASTER_WHISPER, "int8_float16"),
+            (8.0, True, EngineKind.FASTER_WHISPER, "int8_float16"),
+            (12.0, True, EngineKind.FASTER_WHISPER, "int8_float16"),
+            (24.0, True, EngineKind.FASTER_WHISPER, "float16"),  # >= 14 GB -> fp16
         ],
     )
     def test_auto_select_by_vram(
@@ -90,20 +91,30 @@ class TestEngineRouter:
         small = GPUInfo(name="3050", vram_gb=4.0, cuda_available=True, bf16_supported=False)
         big = GPUInfo(name="A100", vram_gb=40.0, cuda_available=True, bf16_supported=True)
         assert EngineRouter.select(small).batch_size <= 4
-        assert EngineRouter.select(big).batch_size >= 16
+        assert EngineRouter.select(big).batch_size >= 8
+
+    def test_auto_never_picks_hf_even_with_bitsandbytes(self, monkeypatch) -> None:
+        """bitsandbytes availability used to promote 6-10 GB cards to the HF
+        int8 path. Auto now stays on Faster-Whisper regardless; bnb only
+        matters once the user explicitly asks for HF."""
+        info = GPUInfo(name="RTX 4060", vram_gb=8.0, cuda_available=True, bf16_supported=False)
+        for bnb in (True, False):
+            monkeypatch.setattr("taigi_asr.router._bitsandbytes_available", lambda bnb=bnb: bnb)
+            assert EngineRouter.select(info).kind is EngineKind.FASTER_WHISPER
 
     def test_hf_int8_only_selected_when_bitsandbytes_available(self, monkeypatch) -> None:
         """Copilot review #1: on Linux with bitsandbytes installed, 6-10 GB
-        cards should pick the int8 path; without it they fall back to fp16."""
+        cards should pick the int8 path; without it they fall back to fp16.
+        Now only reachable through an explicit ``prefer``."""
         info = GPUInfo(name="RTX 4060", vram_gb=8.0, cuda_available=True, bf16_supported=False)
         # With bnb present
         monkeypatch.setattr("taigi_asr.router._bitsandbytes_available", lambda: True)
-        spec = EngineRouter.select(info)
+        spec = EngineRouter.select(info, prefer=EngineKind.HUGGINGFACE)
         assert spec.kind is EngineKind.HUGGINGFACE
         assert spec.compute_type == "int8"
         # Without bnb (simulating Windows)
         monkeypatch.setattr("taigi_asr.router._bitsandbytes_available", lambda: False)
-        spec = EngineRouter.select(info)
+        spec = EngineRouter.select(info, prefer=EngineKind.HUGGINGFACE)
         assert spec.kind is EngineKind.HUGGINGFACE
         assert spec.compute_type == "float16"
 

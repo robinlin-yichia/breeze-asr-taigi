@@ -51,8 +51,11 @@ echo "[2/4] Upgrading pip ..."
 python -m pip install --upgrade pip >/dev/null
 
 if command -v nvidia-smi >/dev/null 2>&1; then
-    echo "[3a/4] Installing CUDA 12.1 PyTorch ..."
-    python -m pip install torch --index-url https://download.pytorch.org/whl/cu121
+    echo "[3a/4] Installing CUDA 12.8 PyTorch ..."
+    # cu128 (not cu121): the optional [diar] extra needs torch>=2.8, which the
+    # cu121 index never got — installing from cu121 would make a later
+    # `pip install -e .[diar]` silently replace CUDA torch with the CPU wheel.
+    python -m pip install torch --index-url https://download.pytorch.org/whl/cu128
 else
     echo "[3a/4] CUDA not detected, installing CPU PyTorch ..."
     python -m pip install torch --index-url https://download.pytorch.org/whl/cpu

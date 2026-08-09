@@ -41,9 +41,12 @@ if not exist .venv (
 )
 call .venv\Scripts\activate.bat
 
-echo [2/4] Installing CUDA 12.1 PyTorch ...
+echo [2/4] Installing CUDA 12.8 PyTorch ...
+REM cu128 (not cu121): the optional [diar] extra needs torch>=2.8, which the
+REM cu121 index never got. Installing from cu121 would make a later
+REM `pip install -e .[diar]` silently replace CUDA torch with the CPU wheel.
 python -m pip install --upgrade pip >nul
-python -m pip install torch --index-url https://download.pytorch.org/whl/cu121 || goto :error
+python -m pip install torch --index-url https://download.pytorch.org/whl/cu128 || goto :error
 
 echo [3/4] Installing taigi-asr (editable + HF extras + dev tools) ...
 python -m pip install -e ".[hf,dev]" || goto :error

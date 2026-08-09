@@ -95,3 +95,51 @@ class TestToJson:
         raw = to_json(sample_segments)
         # Chinese characters should be raw, not \uXXXX
         assert "小時候" in raw
+
+
+class TestSpeakerAwareOutputs:
+    """Speaker labels: VTT uses native voice tags, JSON a separate field.
+
+    Both take a ``speakers`` list positionally parallel to ``segments`` —
+    labels are never baked into the transcript text for these formats.
+    """
+
+    def test_vtt_voice_tags(self, sample_segments) -> None:
+        result = to_vtt(sample_segments, speakers=["SPEAKER_00", "SPEAKER_01"])
+        assert "<v SPEAKER_00>小時候跌倒醫沒好" in result
+        assert "<v SPEAKER_01>長大傻傻在這裡喊玲瓏" in result
+        assert result.startswith("WEBVTT\n\n")
+
+    def test_vtt_escapes_hostile_speaker_label(self, sample_segments) -> None:
+        result = to_vtt(sample_segments, speakers=["<b>&x", "ok"])
+        assert "<v &lt;b&gt;&amp;x>" in result
+        assert "<b>" not in result.replace("<v ", "")
+
+    def test_vtt_empty_speaker_leaves_cue_untagged(self, sample_segments) -> None:
+        result = to_vtt(sample_segments, speakers=["SPEAKER_00", ""])
+        assert "<v SPEAKER_00>" in result
+        assert "長大傻傻在這裡喊玲瓏" in result
+        assert "<v >長大" not in result
+
+    def test_vtt_without_speakers_unchanged(self, sample_segments) -> None:
+        assert to_vtt(sample_segments) == to_vtt(sample_segments, speakers=None)
+
+    def test_vtt_length_mismatch_raises(self, sample_segments) -> None:
+        with pytest.raises(ValueError):
+            to_vtt(sample_segments, speakers=["ONLY_ONE"])
+
+    def test_json_speaker_as_field_not_text_prefix(self, sample_segments) -> None:
+        data = json.loads(to_json(sample_segments, speakers=["SPEAKER_00", "SPEAKER_01"]))
+        assert data["segments"][0]["speaker"] == "SPEAKER_00"
+        assert data["segments"][1]["speaker"] == "SPEAKER_01"
+        # transcript text must stay pristine
+        assert data["segments"][0]["text"] == "小時候跌倒醫沒好"
+
+    def test_json_without_speakers_has_no_speaker_key(self, sample_segments) -> None:
+        data = json.loads(to_json(sample_segments))
+        assert "speaker" not in data["segments"][0]
+
+    def test_json_empty_speaker_entry_omits_key(self, sample_segments) -> None:
+        data = json.loads(to_json(sample_segments, speakers=["SPEAKER_00", ""]))
+        assert data["segments"][0]["speaker"] == "SPEAKER_00"
+        assert "speaker" not in data["segments"][1]

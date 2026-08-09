@@ -8,7 +8,7 @@ import threading
 import webbrowser
 
 from taigi_asr.config import GRADIO_HOST, GRADIO_PORT
-from taigi_asr.ui.gradio_app import build_ui
+from taigi_asr.ui import gradio_app
 
 
 def main() -> None:
@@ -27,7 +27,8 @@ def main() -> None:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
 
-    demo = build_ui()
+    ui_module_theme = getattr(gradio_app, "THEME", None)
+    demo = gradio_app.build_ui()
 
     if not args.no_browser and host in ("127.0.0.1", "localhost"):
         threading.Timer(1.5, lambda: webbrowser.open(f"http://{host}:{args.port}")).start()
@@ -47,7 +48,7 @@ def main() -> None:
         import inspect
 
         if "theme" in inspect.signature(demo.launch).parameters:
-            launch_kwargs["theme"] = gr.themes.Soft()
+            launch_kwargs["theme"] = ui_module_theme or gr.themes.Soft()
     except Exception:  # pragma: no cover
         pass
     demo.queue().launch(**launch_kwargs)

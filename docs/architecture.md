@@ -68,14 +68,33 @@ class ASREngine(Protocol):
 
 All three engines (`FasterWhisperEngine`, `HuggingFaceEngine`, `FakeEngine`) satisfy the Protocol. Callers hold `ASREngine` references, never concrete types. `build_engine(spec)` is the only place where the spec enum maps to a concrete class.
 
-## VRAM routing
+## Engine routing
 
-See `src/taigi_asr/router.py::EngineRouter._fw_spec` / `_hf_spec`. Key design choices:
+See `src/taigi_asr/router.py::EngineRouter`. Key design choices:
 
-- **RTX 3050 Laptop 4GB = main target**. Windows reports ~3.84 GB; the threshold is 3.5 GB so the 3050 class lands in the safe int8_float16 + batch=4 bucket.
-- **int8_float16 is preferred over float16 on Ampere consumer cards**. Tensor Cores are 8-bit optimal; empirically `int8_float16` is both faster AND more VRAM-efficient than `float16` on the 3050.
-- **HF path requires bitsandbytes for < 8 GB cards**. bitsandbytes is Linux-only, so on Windows the router auto-downgrades to Faster-Whisper for 4-6 GB cards.
+- **Auto always picks Faster-Whisper**, regardless of VRAM. Measured on a 12 GB
+  card, the HF path is ~17x slower for slightly less text, and its
+  word-timestamp alignment grows memory with audio duration (a 2.5 h recording
+  OOMed at 12 GB after 138 min; CTranslate2 finished the same file in 230 s).
+  More VRAM only postpones the OOM, so there is no threshold above which HF
+  becomes the better automatic choice. Full numbers in the README's
+  「模型取捨」 section and in `EngineRouter.select`'s comment.
+- **HF stays reachable via explicit `prefer`** — Apple Silicon (CTranslate2 has
+  no Metal backend), official-weights verification, Linux bitsandbytes int8.
+  Note: installing the `[diar]` extra breaks the HF engine wherever
+  torchcodec's FFmpeg shared libraries are unavailable (typical on Windows);
+  `HuggingFaceEngine.load()` detects this and fails fast with guidance.
+- **RTX 3050 Laptop 4GB remains the low end**. Windows reports ~3.84 GB; the
+  threshold is 3.5 GB so the 3050 class lands in the safe int8_float16 +
+  batch=4 bucket.
+- **int8_float16 is preferred over float16 on Ampere consumer cards**. Tensor
+  Cores are 8-bit optimal; empirically `int8_float16` is both faster AND more
+  VRAM-efficient than `float16` on the 3050, and its transcript differs from
+  float16 by ~0.2% of characters.
 - **CPU fallback uses `compute_type="int8"`** (pure int8, no fp16 mixing).
+- **Word timestamps are free on Faster-Whisper** and are what the diarization
+  path relies on: `_group_words()` splits the model's ~25 s segments at natural
+  pauses (>= 0.4 s, max 8 s span) so each line stays inside one speaker's turn.
 
 ## VRAM safety
 

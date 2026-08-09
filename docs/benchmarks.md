@@ -69,7 +69,12 @@ FasterWhisperEngine(
 )
 ```
 
-These are the router defaults for VRAM in the `[3.5 GB, 14 GB)` bracket. Users with >= 6 GB can safely bump `batch_size=8`. bitsandbytes int8 HF path needs Linux + 6 GB+.
+These are the router defaults for VRAM in the `[3.5 GB, 14 GB)` bracket. Users with >= 6 GB can safely bump `batch_size=8`.
+
+> Since v0.2.0 the router's Auto mode always selects Faster-Whisper regardless
+> of VRAM — the HF pipeline measured ~17x slower on the same audio and its
+> word-timestamp alignment OOMs on multi-hour recordings. The HF engine remains
+> available by explicit selection. See README「模型取捨」for the comparison.
 
 ## Failed configs (documented so future contributors don't repeat)
 

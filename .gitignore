@@ -52,6 +52,10 @@ ENV/
 env.bak/
 venv.bak/
 
+# Backups (詞典編輯器存檔前會產生 terms.json.bak)
+*.bak
+*.tmp
+
 # IDE
 .idea/
 .vscode/
@@ -75,6 +79,19 @@ outputs/
 *.vtt
 *_transcript.txt
 *_subtitle.srt
+
+# Transcripts of real recordings. The *.srt rule above misses the JSON and TXT
+# variants, and diarized output carries speaker-attributed meeting content —
+# never commit it. Keep the folders so the app can write into a fresh clone.
+outputs_diarized/*
+!outputs_diarized/.gitkeep
+data/*
+!data/test.m4a
+!data/.gitkeep
+
+# Personal term dictionary: names, vendors and in-house jargon. Ship
+# terms.example.json instead; each user keeps their own terms.json.
+terms.json
 
 # User-provided audio (except test fixture)
 *.m4a

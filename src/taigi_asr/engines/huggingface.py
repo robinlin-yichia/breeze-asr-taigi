@@ -32,6 +32,76 @@ from taigi_asr.segments import TimestampedSegment
 log = logging.getLogger(__name__)
 
 
+def _load_wav_array(path: str | Path) -> tuple[object, int]:
+    """Decode a WAV file to a mono float32 numpy array.
+
+    Rationale: handing the pipeline a *path* makes recent ``transformers``
+    versions delegate decoding to ``torchcodec``, which on Windows needs the
+    FFmpeg "full-shared" DLLs and frequently fails to load. ``AudioConverter``
+    has already produced 16 kHz mono PCM WAV upstream, so we decode it here and
+    pass raw samples instead -- no torchcodec, no FFmpeg DLLs.
+
+    Tries soundfile first, then falls back to the stdlib ``wave`` module so the
+    engine keeps working even without soundfile installed.
+    """
+    import numpy as np
+
+    try:
+        import soundfile as sf
+
+        data, sr = sf.read(str(path), dtype="float32", always_2d=False)
+    except Exception:
+        import wave
+
+        with wave.open(str(path), "rb") as wf:
+            sr = wf.getframerate()
+            channels = wf.getnchannels()
+            width = wf.getsampwidth()
+            raw = wf.readframes(wf.getnframes())
+
+        dtype_map = {1: np.uint8, 2: np.int16, 4: np.int32}
+        if width not in dtype_map:
+            raise TranscriptionError(f"Unsupported WAV sample width: {width} bytes") from None
+        dtype = dtype_map[width]
+        data = np.frombuffer(raw, dtype=dtype)
+        if width == 1:  # 8-bit WAV is unsigned
+            data = (data.astype(np.float32) - 128.0) / 128.0
+        else:
+            data = data.astype(np.float32) / float(np.iinfo(dtype).max)
+        if channels > 1:
+            data = data.reshape(-1, channels)
+
+    if getattr(data, "ndim", 1) > 1:  # downmix to mono
+        data = data.mean(axis=1)
+    return np.ascontiguousarray(data, dtype=np.float32), int(sr)
+
+
+def _torchcodec_blocks_pipeline() -> str | None:
+    """Why the transformers audio path will fail, or None if it will work.
+
+    ``transformers`` does an unconditional ``import torchcodec`` inside the ASR
+    pipeline's ``preprocess()`` whenever torchcodec's *metadata* is present — it
+    never checks that the library can actually load. ``pyannote.audio`` depends
+    on torchcodec, so installing speaker diarization is enough to break this
+    engine on any machine where torchcodec's FFmpeg shared libraries are absent
+    (Windows FFmpeg builds are typically static, and torchcodec only supports
+    FFmpeg 4-8). Detecting it here turns a confusing mid-transcription traceback
+    into an actionable message before the model is even loaded.
+    """
+    try:
+        from transformers.utils import is_torchcodec_available
+    except Exception:
+        return None
+    if not is_torchcodec_available():
+        return None
+    try:
+        import torchcodec  # noqa: F401
+    except Exception as exc:
+        first = str(exc).strip().splitlines()
+        return first[0] if first else exc.__class__.__name__
+    return None
+
+
 class HuggingFaceEngine:
     """Whisper pipeline with torch.compile + SDPA + optional 8-bit quant."""
 
@@ -67,6 +137,16 @@ class HuggingFaceEngine:
                 raise ModelLoadError(
                     'transformers / torch not installed. Run: pip install -e ".[hf]"'
                 ) from exc
+
+            blocker = _torchcodec_blocks_pipeline()
+            if blocker is not None:
+                raise ModelLoadError(
+                    "HuggingFace 引擎無法在這個環境使用：torchcodec 已安裝但載入失敗"
+                    f"（{blocker}）。transformers 只要偵測到該套件就會無條件 import 它。\n"
+                    "torchcodec 是 pyannote.audio（語者標註）的相依套件，兩者無法共存。\n"
+                    "解法：改用 Faster-Whisper 引擎（更快，且長音檔不會 OOM），"
+                    "或安裝 FFmpeg 4-8 的 full-shared 版讓 torchcodec 能載入。"
+                )
 
             try:
                 processor = AutoProcessor.from_pretrained(self.MODEL_ID)
@@ -162,8 +242,15 @@ class HuggingFaceEngine:
         assert self.pipe is not None
 
         try:
+            audio_array, sampling_rate = _load_wav_array(wav_path)
+        except TranscriptionError:
+            raise
+        except Exception as exc:
+            raise TranscriptionError(f"Failed to decode WAV: {exc}") from exc
+
+        try:
             result = self.pipe(
-                str(wav_path),
+                {"raw": audio_array, "sampling_rate": sampling_rate},
                 batch_size=self.batch_size,
                 generate_kwargs={
                     "max_new_tokens": DEFAULT_MAX_NEW_TOKENS,

@@ -128,11 +128,28 @@ class EngineRouter:
         if prefer is EngineKind.FASTER_WHISPER:
             return EngineRouter._fw_spec(vram)
 
-        # Auto — Faster-Whisper (int8 peak ~2.9 GB) is the safer default for
-        # <= 4 GB cards. HF pipeline is preferred only when the GPU can fit
-        # either fp16 (>= 10 GB) or bitsandbytes int8 (>= 6 GB).
-        if vram >= 6.0:
-            return EngineRouter._hf_spec(vram)
+        # Auto — always Faster-Whisper, regardless of how much VRAM is free.
+        #
+        # Measured on Breeze-ASR-26, RTX 3080 Ti 12 GB, 120 s of meeting audio
+        # (characters counted with whitespace stripped, so segmentation does
+        # not skew the comparison):
+        #
+        #     engine                chars  segments   wall
+        #     FW  int8_float16        529        21    3.3 s
+        #     HF  float16             520        60   57.0 s
+        #
+        # HF is 17x slower for slightly less text. Two compounding reasons:
+        # ``torch.compile``, which _hf_spec's throughput assumes, silently
+        # no-ops on Windows (inductor needs triton, which has no Windows
+        # wheel), and transformers' word-timestamp alignment runs DTW over
+        # per-layer cross-attention retained for the whole file. That last
+        # part also makes memory grow with duration: a 2.5 h recording died
+        # with CUDA OOM after 138 minutes at 11998/12288 MiB, while the
+        # CTranslate2 path finished the same file in 230 s.
+        #
+        # Bigger cards do not change the ranking — they only postpone the OOM
+        # — so there is no VRAM threshold above which HF becomes the better
+        # automatic choice. It stays reachable via ``prefer``.
         return EngineRouter._fw_spec(vram)
 
     @staticmethod

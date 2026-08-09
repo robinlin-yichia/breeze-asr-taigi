@@ -6,8 +6,12 @@ faster-whisper>=1.1.0
 soundfile>=0.12
 pydub>=0.25
 numpy>=1.24
-gradio>=4.44
+gradio>=6.0
 huggingface-hub>=0.24
 
 # Optional: HuggingFace pipeline engine
 # pip install -e ".[hf]"   # transformers + accelerate + bitsandbytes
+
+# Optional: speaker diarization (mutually exclusive with the HF engine on
+# systems without FFmpeg 4-8 shared libraries -- see README)
+# pip install -e ".[diar]"  # pyannote.audio
