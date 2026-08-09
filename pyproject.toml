@@ -77,9 +77,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/thc1006/breeze-asr-taigi"
-Repository = "https://github.com/thc1006/breeze-asr-taigi"
-Issues = "https://github.com/thc1006/breeze-asr-taigi/issues"
+Homepage = "https://github.com/robinlin-yichia/breeze-asr-taigi"
+Repository = "https://github.com/robinlin-yichia/breeze-asr-taigi"
+Issues = "https://github.com/robinlin-yichia/breeze-asr-taigi/issues"
+Upstream = "https://github.com/thc1006/breeze-asr-taigi"
 
 [project.scripts]
 taigi-asr = "taigi_asr.cli:main"

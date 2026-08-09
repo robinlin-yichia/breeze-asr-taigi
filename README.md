@@ -82,7 +82,7 @@ ffmpeg -version     # 任何版本都可以
 ### 2. 取得專案並安裝
 
 ```powershell
-git clone https://github.com/<your-org>/breeze-asr-taigi.git
+git clone https://github.com/robinlin-yichia/breeze-asr-taigi.git
 cd breeze-asr-taigi
 .\install.bat
 ```
