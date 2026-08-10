@@ -907,10 +907,10 @@ def build_ui() -> gr.Blocks:
         else "CPU ONLY · 無 CUDA GPU，速度會慢很多"
     )
 
-    with gr.Blocks(title="台語轉錄 Taigi ASR", css=CSS, head=THEME_HEAD) as demo:
+    with gr.Blocks(title="台灣華語逐字稿 · Taigi ASR", css=CSS, head=THEME_HEAD) as demo:
         gr.HTML(
             '<div class="masthead">'
-            '<div class="kanban">台語逐字稿</div>'
+            '<div class="kanban">台灣華語逐字稿</div>'
             '<div class="sub">BREEZE-ASR-26 · 國語台語英文夾雜 · 語者標註 · 詞典校正</div>'
             "</div>"
         )
